@@ -346,6 +346,36 @@ async def cancel_ride(ride_id: int, body: CancelIn, user: dict = Depends(current
     return {"ok": True}
 
 
+@router.post("/rides/{ride_id}/full")
+async def mark_full(ride_id: int, user: dict = Depends(current_user)):
+    """Haydovchi "To'ldim" bosdi: e'lon yopiladi, kanal posti o'chiriladi, qidiruvdan olinadi."""
+    async with pool().acquire() as conn:
+        ride = await conn.fetchrow(
+            "SELECT * FROM rides WHERE id = $1 AND driver_id = $2 AND status = 'open'",
+            ride_id, user["id"],
+        )
+        if not ride:
+            raise HTTPException(404, "E'lon topilmadi yoki allaqachon yopilgan")
+        await conn.execute(
+            "UPDATE rides SET status = 'closed', channel_msg_id = NULL WHERE id = $1", ride_id
+        )
+
+    msg_id = ride["channel_msg_id"]
+    if msg_id:
+        try:
+            await bot.delete_message(CHANNEL, msg_id)
+        except Exception:
+            # Telegram 48 soatdan eski postni o'chirtirmaydi - o'rniga "TO'LDI" deb yangilaymiz
+            try:
+                await bot.edit_message_text(
+                    ride_post_text(ride, user["name"], seats_left=0),
+                    chat_id=CHANNEL, message_id=msg_id,
+                )
+            except Exception:
+                logging.exception("Kanal posti o'chirilmadi (ride_id=%s)", ride_id)
+    return {"ok": True}
+
+
 # ---------- Yo'lovchi ----------
 @router.post("/rides/{ride_id}/book")
 async def book_ride(ride_id: int, body: BookIn, user: dict = Depends(current_user)):
