@@ -1,21 +1,34 @@
-[README.md](https://github.com/user-attachments/files/34625768/README.md)
-# NAMOZ VAQTI UZ
+[README (1).md](https://github.com/user-attachments/files/34626557/README.1.md)
+# YO'LDOSH UZ
 
-Telegram bot: Ramazon taqvimi va namoz vaqtlarini eslatadi.
+Telegram Mini App: shaharlararo yo'lovchi va haydovchilarni bog'laydi.
 
-## Imkoniyatlar (reja)
-- 5 mahal namoz vaqti (Bomdod, Peshin, Asr, Shom, Xufton)
-- Namozga 15 daqiqa qolganda eslatma
-- Namoz vaqti kirganda xabar
-- Ramazon taqvimi (saharlik / iftorlik)
-- Shahar tanlash
+## Asosiy imkoniyatlar (MVP)
+1. Haydovchi e'lon beradi: qayerdan, qayerga, sana, vaqt, bo'sh joylar, narx, telefon
+2. Yo'lovchi qidiradi: yo'nalish va sana bo'yicha filtr
+3. Yo'lovchi joy band qiladi, haydovchiga botdan xabar boradi
+4. "Mening e'lonlarim" va "Mening bronlarim" bo'limlari
 
-## Ishga tushirish (lokal)
+## Tuzilishi
 ```
-pip install -r requirements.txt
-cp .env.example .env   # BOT_TOKEN ni kiriting
-python main.py
+yoldosh/
+├── main.py          # FastAPI server + bot webhook
+├── config.py        # sozlamalar
+├── db.py            # baza (PostgreSQL)
+├── bot.py           # Telegram bot (aiogram)
+├── api.py           # Mini App uchun API
+└── webapp/          # Mini App sahifasi (HTML/CSS/JS)
 ```
 
-## Deploy
-GitHub -> Render (Background Worker yoki Web Service).
+## Texnologiyalar
+- Python, FastAPI, aiogram 3
+- PostgreSQL (Neon yoki Supabase, bepul)
+- GitHub -> Render (bitta Web Service)
+
+## Qadamlar
+1. Loyiha skeleti, BotFather, GitHub  <- hozir shu yerda
+2. Baza (Neon) va jadvallar
+3. Bot va webhook
+4. API (e'lon qo'shish, qidirish, band qilish)
+5. Mini App sahifasi
+6. Render'ga joylash va BotFather'da Mini App ulash
