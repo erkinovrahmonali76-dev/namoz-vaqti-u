@@ -1,17 +1,18 @@
-"""Mini App uchun API: e'lon berish, qidirish, band qilish."""
+"""Mini App uchun API: e'lon berish, qidirish, band qilish, bekor qilish."""
 import html
 import logging
 import re
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 import db
 from auth import current_user
 from bot import bot
-from config import REGIONS
+from config import BOT_USERNAME, CHANNEL, CHANNEL_URL, REGIONS
 
 router = APIRouter(prefix="/api")
 TZ = ZoneInfo("Asia/Tashkent")
@@ -66,6 +67,10 @@ class BookIn(BaseModel):
     phone: str = Field(min_length=7, max_length=20)
 
 
+class CancelIn(BaseModel):
+    reason: str = Field(min_length=2, max_length=200)
+
+
 def ride_dict(r, *, seats_left: int | None = None) -> dict:
     return {
         "id": r["id"],
@@ -78,14 +83,49 @@ def ride_dict(r, *, seats_left: int | None = None) -> dict:
         "car": r["car"],
         "note": r["note"],
         "status": r["status"],
-        "driver_name": r.get("driver_name", "") if hasattr(r, "get") else r["driver_name"],
+        "driver_name": r.get("driver_name", ""),
     }
+
+
+# ---------- Kanal posti ----------
+def ride_post_text(r, driver_name: str, cancelled: bool = False, reason: str = "") -> str:
+    head = "❌ <b>BEKOR QILINDI</b>\n\n" if cancelled else "📣 <b>Yangi e'lon</b>\n\n"
+    price = f"{r['price']:,}".replace(",", " ")
+    text = (
+        f"{head}"
+        f"📍 <b>{html.escape(r['from_place'])} → {html.escape(r['to_place'])}</b>\n"
+        f"🕒 {fmt_dt(r['depart_at'])}\n"
+        f"💺 Bo'sh joy: {r['seats']}\n"
+        f"💰 {price} so'm (bir joy)"
+    )
+    if r["car"]:
+        text += f"\n🚘 {html.escape(r['car'])}"
+    if r["note"]:
+        text += f"\n📝 {html.escape(r['note'])}"
+    text += f"\n👤 {html.escape(driver_name)}"
+    if cancelled and reason:
+        text += f"\n\nSabab: {html.escape(reason)}"
+    return text
+
+
+def channel_kb():
+    if not BOT_USERNAME:
+        return None
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="🚗 Band qilish", url=f"https://t.me/{BOT_USERNAME}")
+    ]])
 
 
 # ---------- Ochiq ma'lumotlar ----------
 @router.get("/places")
 async def places():
-    return {"regions": REGIONS}
+    return {"regions": REGIONS, "channel_url": CHANNEL_URL}
+
+
+@router.get("/me")
+async def me(user: dict = Depends(current_user)):
+    """Obunani tekshirish uchun: obuna bo'lmasa 403 not_subscribed qaytadi."""
+    return user
 
 
 @router.get("/rides")
@@ -150,6 +190,19 @@ async def create_ride(body: RideIn, user: dict = Depends(current_user)):
             body.car.strip(), phone, body.note.strip(),
         )
         await conn.execute("UPDATE users SET phone = $2 WHERE tg_id = $1", user["id"], phone)
+
+    # Kanalga avtomatik joylash (telefon raqami postda ko'rinmaydi)
+    try:
+        data = {
+            "from_place": from_place, "to_place": to_place, "depart_at": depart,
+            "seats": body.seats, "price": body.price,
+            "car": body.car.strip(), "note": body.note.strip(),
+        }
+        msg = await bot.send_message(CHANNEL, ride_post_text(data, user["name"]), reply_markup=channel_kb())
+        async with pool().acquire() as conn:
+            await conn.execute("UPDATE rides SET channel_msg_id = $2 WHERE id = $1", ride_id, msg.message_id)
+    except Exception:
+        logging.exception("Kanalga joylanmadi (bot kanalda admin ekanini tekshiring)")
     return {"id": ride_id}
 
 
@@ -190,7 +243,8 @@ async def my_rides(user: dict = Depends(current_user)):
 
 
 @router.post("/rides/{ride_id}/cancel")
-async def cancel_ride(ride_id: int, user: dict = Depends(current_user)):
+async def cancel_ride(ride_id: int, body: CancelIn, user: dict = Depends(current_user)):
+    reason = body.reason.strip()
     async with pool().acquire() as conn:
         async with conn.transaction():
             ride = await conn.fetchrow(
@@ -201,9 +255,12 @@ async def cancel_ride(ride_id: int, user: dict = Depends(current_user)):
                 raise HTTPException(404, "E'lon topilmadi")
             if ride["status"] != "open":
                 raise HTTPException(400, "E'lon allaqachon yopilgan")
-            await conn.execute("UPDATE rides SET status = 'cancelled' WHERE id = $1", ride_id)
+            await conn.execute(
+                "UPDATE rides SET status = 'cancelled', cancel_reason = $2 WHERE id = $1",
+                ride_id, reason,
+            )
             passengers = await conn.fetch(
-                "UPDATE bookings SET status = 'cancelled' "
+                "UPDATE bookings SET status = 'cancelled', cancel_reason = 'Haydovchi safarni bekor qildi' "
                 "WHERE ride_id = $1 AND status = 'active' RETURNING passenger_id",
                 ride_id,
             )
@@ -212,8 +269,19 @@ async def cancel_ride(ride_id: int, user: dict = Depends(current_user)):
         await notify(
             p["passenger_id"],
             f"⚠️ Haydovchi safarni bekor qildi:\n"
-            f"{html.escape(ride['from_place'])} → {html.escape(ride['to_place'])}, {fmt_dt(ride['depart_at'])}",
+            f"{html.escape(ride['from_place'])} → {html.escape(ride['to_place'])}, {fmt_dt(ride['depart_at'])}\n"
+            f"Sabab: {html.escape(reason)}",
         )
+
+    # Kanaldagi postni "bekor qilindi" qilib yangilash
+    if ride["channel_msg_id"]:
+        try:
+            await bot.edit_message_text(
+                ride_post_text(ride, user["name"], cancelled=True, reason=reason),
+                chat_id=CHANNEL, message_id=ride["channel_msg_id"],
+            )
+        except Exception:
+            logging.exception("Kanal posti yangilanmadi")
     return {"ok": True}
 
 
@@ -292,15 +360,16 @@ async def my_bookings(user: dict = Depends(current_user)):
 
 
 @router.post("/bookings/{booking_id}/cancel")
-async def cancel_booking(booking_id: int, user: dict = Depends(current_user)):
+async def cancel_booking(booking_id: int, body: CancelIn, user: dict = Depends(current_user)):
+    reason = body.reason.strip()
     async with pool().acquire() as conn:
         row = await conn.fetchrow(
             """
-            UPDATE bookings SET status = 'cancelled'
+            UPDATE bookings SET status = 'cancelled', cancel_reason = $3
             WHERE id = $1 AND passenger_id = $2 AND status = 'active'
             RETURNING ride_id, seats
             """,
-            booking_id, user["id"],
+            booking_id, user["id"], reason,
         )
         if not row:
             raise HTTPException(404, "Bron topilmadi")
@@ -311,6 +380,7 @@ async def cancel_booking(booking_id: int, user: dict = Depends(current_user)):
             ride["driver_id"],
             f"❌ Bron bekor qilindi:\n"
             f"{html.escape(ride['from_place'])} → {html.escape(ride['to_place'])}, {fmt_dt(ride['depart_at'])}\n"
-            f"👤 {html.escape(user['name'])}, joy: {row['seats']}",
+            f"👤 {html.escape(user['name'])}, joy: {row['seats']}\n"
+            f"Sabab: {html.escape(reason)}",
         )
     return {"ok": True}
