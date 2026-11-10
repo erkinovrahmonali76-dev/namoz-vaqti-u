@@ -108,11 +108,12 @@ def ride_post_text(r, driver_name: str, cancelled: bool = False, reason: str = "
     return text
 
 
-def channel_kb():
+def channel_kb(ride_id: int):
+    """Kanal postidagi tugma: botga o'tadi va aynan shu e'lonni ochadi."""
     if not BOT_USERNAME:
         return None
     return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="🚗 Band qilish", url=f"https://t.me/{BOT_USERNAME}")
+        InlineKeyboardButton(text="🚗 Band qilish", url=f"https://t.me/{BOT_USERNAME}?start=ride_{ride_id}")
     ]])
 
 
@@ -164,6 +165,27 @@ async def search_rides(from_place: str = "", to_place: str = "", day: str = ""):
     return [ride_dict(dict(r), seats_left=int(r["seats_left"])) for r in rows]
 
 
+@router.get("/rides/{ride_id}")
+async def get_ride(ride_id: int):
+    """Kanal postidan kelgan foydalanuvchiga bitta e'lonni ko'rsatish uchun."""
+    async with pool().acquire() as conn:
+        r = await conn.fetchrow(
+            """
+            SELECT r.*, u.name AS driver_name,
+                   r.seats - COALESCE((SELECT SUM(seats) FROM bookings
+                                       WHERE ride_id = r.id AND status = 'active'), 0) AS seats_left
+            FROM rides r JOIN users u ON u.tg_id = r.driver_id
+            WHERE r.id = $1
+            """,
+            ride_id,
+        )
+    if not r or r["status"] != "open" or r["depart_at"] <= datetime.now(TZ):
+        raise HTTPException(404, "Bu e'lon endi mavjud emas")
+    if r["seats_left"] <= 0:
+        raise HTTPException(404, "Bu e'londa bo'sh joy qolmagan")
+    return ride_dict(dict(r), seats_left=int(r["seats_left"]))
+
+
 # ---------- Haydovchi ----------
 @router.post("/rides")
 async def create_ride(body: RideIn, user: dict = Depends(current_user)):
@@ -198,7 +220,7 @@ async def create_ride(body: RideIn, user: dict = Depends(current_user)):
             "seats": body.seats, "price": body.price,
             "car": body.car.strip(), "note": body.note.strip(),
         }
-        msg = await bot.send_message(CHANNEL, ride_post_text(data, user["name"]), reply_markup=channel_kb())
+        msg = await bot.send_message(CHANNEL, ride_post_text(data, user["name"]), reply_markup=channel_kb(ride_id))
         async with pool().acquire() as conn:
             await conn.execute("UPDATE rides SET channel_msg_id = $2 WHERE id = $1", ride_id, msg.message_id)
     except Exception:
