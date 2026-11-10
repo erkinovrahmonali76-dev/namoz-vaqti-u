@@ -1,5 +1,5 @@
 """Namoz vaqtlarini olish (Aladhan API, bepul, kalit talab qilmaydi)."""
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import aiohttp
@@ -9,7 +9,6 @@ from config import TIMEZONE
 
 API_URL = "https://api.aladhan.com/v1/timings/{d}"
 
-# Aladhan kalitlari -> o'zbekcha nomlar (tartib muhim)
 API_TO_UZ = {
     "Fajr": "Bomdod",
     "Dhuhr": "Peshin",
@@ -19,18 +18,17 @@ API_TO_UZ = {
 }
 
 # method=3 (Muslim World League), school=1 (Hanafiy mazhabi, Asr uchun)
-# Eslatma: O'zbekiston Musulmonlar idorasi jadvali bilan 1-3 daqiqa farq
-# bo'lishi mumkin. Keyinroq islom.uz bilan solishtirib sozlaymiz.
 PARAMS = {"method": 3, "school": 1}
 
-_cache: dict[tuple[str, date], dict[str, datetime]] = {}
+_cache: dict[tuple[str, date], tuple[dict[str, datetime], datetime]] = {}
 
 
-async def get_prayer_times(city: str = DEFAULT_CITY, day: date | None = None) -> dict[str, datetime]:
-    """Berilgan shahar va kun uchun 5 mahal namoz vaqtini qaytaradi.
+def _parse(day: date, value: str, tz: ZoneInfo) -> datetime:
+    hh, mm = value.split(" ")[0].split(":")
+    return datetime(day.year, day.month, day.day, int(hh), int(mm), tzinfo=tz)
 
-    Natija: {"Bomdod": datetime, "Peshin": datetime, ...} (tz-aware)
-    """
+
+async def _load(city: str, day: date | None):
     if city not in CITIES:
         city = DEFAULT_CITY
     tz = ZoneInfo(TIMEZONE)
@@ -50,13 +48,36 @@ async def get_prayer_times(city: str = DEFAULT_CITY, day: date | None = None) ->
             data = await resp.json()
 
     timings = data["data"]["timings"]
-    result: dict[str, datetime] = {}
-    for api_key, uz_name in API_TO_UZ.items():
-        hh, mm = timings[api_key].split(" ")[0].split(":")
-        result[uz_name] = datetime(day.year, day.month, day.day, int(hh), int(mm), tzinfo=tz)
+    times = {uz: _parse(day, timings[api], tz) for api, uz in API_TO_UZ.items()}
+    sunrise = _parse(day, timings["Sunrise"], tz)
 
-    # Eski kunlarni keshdan tozalash
     for k in [k for k in _cache if k[1] < day]:
         del _cache[k]
-    _cache[key] = result
-    return result
+    _cache[key] = (times, sunrise)
+    return _cache[key]
+
+
+async def get_prayer_times(city: str = DEFAULT_CITY, day: date | None = None) -> dict[str, datetime]:
+    """5 mahal namoz boshlanish vaqti: {"Bomdod": datetime, ...}"""
+    times, _ = await _load(city, day)
+    return times
+
+
+async def get_end_times(city: str = DEFAULT_CITY, day: date | None = None) -> dict[str, datetime]:
+    """Har bir namoz vaqti tugash payti.
+
+    Bomdod - quyosh chiqishi, Peshin - Asr boshlanishi, Asr - Shom boshlanishi,
+    Shom - Xufton boshlanishi, Xufton - 2 soat keyin (ko'pi bilan 23:30).
+    """
+    times, sunrise = await _load(city, day)
+    xufton_end = min(
+        times["Xufton"] + timedelta(hours=2),
+        times["Xufton"].replace(hour=23, minute=30),
+    )
+    return {
+        "Bomdod": sunrise,
+        "Peshin": times["Asr"],
+        "Asr": times["Shom"],
+        "Shom": times["Xufton"],
+        "Xufton": xufton_end,
+    }
