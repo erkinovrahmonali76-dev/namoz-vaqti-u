@@ -45,7 +45,7 @@
 
   .searchbox { position: relative; margin-top: -30px; background: var(--surface); border: 1px solid var(--line);
     border-radius: var(--r); padding: 14px; box-shadow: var(--shadow); }
-  .searchbox input { background: var(--bg); }
+  .searchbox input, .searchbox select { background: var(--bg); }
   .searchbox .field { margin-bottom: 0; }
   .swap { display: flex; align-items: center; gap: 8px; }
   .swap .pair { flex: 1; display: grid; gap: 8px; min-width: 0; }
@@ -130,7 +130,6 @@
     <div class="road"></div>
   </header>
   <main id="view"></main>
-  <datalist id="places"></datalist>
   <nav id="tabs">
     <button data-tab="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Qidirish</button>
     <button data-tab="post"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>E'lon berish</button>
@@ -285,8 +284,14 @@ function askReason(title, reasons, onSubmit) {
 }
 
 /* ---------- Umumiy kartalar ---------- */
-function placeInput(value, placeholder) {
-  return h("input", { type: "text", list: "places", placeholder, value, autocomplete: "off", maxlength: "40" });
+let PLACES = ["Andijon", "Buxoro", "Farg'ona", "Jizzax", "Namangan", "Navoiy", "Qashqadaryo", "Qo'qon",
+  "Samarqand", "Sirdaryo", "Surxondaryo", "Toshkent", "Xorazm", "Yaypan"];
+
+function placeSelect(value, placeholder) {
+  const sel = h("select", {}, h("option", { value: "" }, placeholder),
+    ...PLACES.map((p) => h("option", { value: p }, p)));
+  sel.value = value || "";
+  return sel;
 }
 
 function rideHeader(r) {
@@ -304,8 +309,8 @@ function isPast(r) { return new Date(r.depart_at) <= new Date(); }
 
 /* ---------- 1. Qidirish ---------- */
 function viewSearch() {
-  const from = placeInput(state.q.from, "Qayerdan");
-  const to = placeInput(state.q.to, "Qayerga");
+  const from = placeSelect(state.q.from, "Qayerdan (hammasi)");
+  const to = placeSelect(state.q.to, "Qayerga (hammasi)");
   const day = h("input", { type: "date", value: state.q.day, min: todayTashkent() });
   const results = h("div");
 
@@ -393,8 +398,8 @@ function openBook(r) {
 
 /* ---------- 2. E'lon berish ---------- */
 function viewPost() {
-  const from = placeInput("", "Masalan: Qo'qon");
-  const to = placeInput("", "Masalan: Toshkent");
+  const from = placeSelect("", "Tanlang");
+  const to = placeSelect("", "Tanlang");
   const day = h("input", { type: "date", min: todayTashkent(), value: todayTashkent() });
   const time = h("input", { type: "time", value: "08:00" });
   const seats = h("select", {}, ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) =>
@@ -406,7 +411,8 @@ function viewPost() {
   const btn = h("button", { class: "btn" }, "E'lonni joylash");
 
   btn.onclick = async () => {
-    if (!from.value.trim() || !to.value.trim()) return toast("Qayerdan va qayerga ni kiriting");
+    if (!from.value || !to.value) return toast("Qayerdan va qayerga ni tanlang");
+    if (from.value === to.value) return toast("Qayerdan va qayerga bir xil bo'lmasin");
     if (!day.value || !time.value) return toast("Sana va vaqtni kiriting");
     if (price.value === "") return toast("Narxni kiriting");
     btn.disabled = true;
@@ -543,8 +549,7 @@ document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("cli
   try {
     const data = await api("/places");
     if (data.channel_url) CHANNEL_URL = data.channel_url;
-    const list = document.getElementById("places");
-    Object.values(data.regions).flat().forEach((p) => list.append(h("option", { value: p })));
+    if (Array.isArray(data.places) && data.places.length) PLACES = data.places;
   } catch (e) { /* takliflarsiz ham ishlaydi */ }
 
   // Majburiy obuna: obuna bo'lmasa api() o'zi showSubscribe() ni chiqaradi
