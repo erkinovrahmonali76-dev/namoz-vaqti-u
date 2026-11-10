@@ -43,9 +43,6 @@ CREATE TABLE IF NOT EXISTS bookings (
 );
 
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
-ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancel_reason TEXT NOT NULL DEFAULT '';
-ALTER TABLE rides ADD COLUMN IF NOT EXISTS cancel_reason TEXT NOT NULL DEFAULT '';
-ALTER TABLE rides ADD COLUMN IF NOT EXISTS channel_msg_id BIGINT;
 
 CREATE INDEX IF NOT EXISTS idx_bookings_ride ON bookings (ride_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_passenger ON bookings (passenger_id);
