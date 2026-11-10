@@ -1,63 +1,68 @@
-"""Foydalanuvchilarni SQLite'da saqlash."""
-import os
+"""PostgreSQL bazasi: ulanish va jadvallar."""
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-import aiosqlite
+import asyncpg
 
-from cities import DEFAULT_CITY
+from config import DATABASE_URL
 
-DB_PATH = os.getenv("DB_PATH", "namoz.db")
+pool: asyncpg.Pool | None = None
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS users (
+    tg_id      BIGINT PRIMARY KEY,
+    name       TEXT NOT NULL DEFAULT '',
+    phone      TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS rides (
+    id          BIGSERIAL PRIMARY KEY,
+    driver_id   BIGINT NOT NULL REFERENCES users(tg_id),
+    from_place  TEXT NOT NULL,
+    to_place    TEXT NOT NULL,
+    depart_at   TIMESTAMPTZ NOT NULL,
+    seats       INTEGER NOT NULL CHECK (seats BETWEEN 1 AND 8),
+    price       INTEGER NOT NULL CHECK (price >= 0),
+    car         TEXT NOT NULL DEFAULT '',
+    phone       TEXT NOT NULL,
+    note        TEXT NOT NULL DEFAULT '',
+    status      TEXT NOT NULL DEFAULT 'open',   -- open | closed | cancelled
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_rides_search
+    ON rides (status, depart_at, lower(from_place), lower(to_place));
+
+CREATE TABLE IF NOT EXISTS bookings (
+    id            BIGSERIAL PRIMARY KEY,
+    ride_id       BIGINT NOT NULL REFERENCES rides(id) ON DELETE CASCADE,
+    passenger_id  BIGINT NOT NULL REFERENCES users(tg_id),
+    seats         INTEGER NOT NULL CHECK (seats BETWEEN 1 AND 8),
+    status        TEXT NOT NULL DEFAULT 'active',  -- active | cancelled
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_bookings_ride ON bookings (ride_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_passenger ON bookings (passenger_id);
+"""
+
+
+def _clean_dsn(dsn: str) -> str:
+    """Neon ba'zan asyncpg tushunmaydigan channel_binding parametrini qo'shadi - olib tashlaymiz."""
+    parts = urlparse(dsn)
+    query = [(k, v) for k, v in parse_qsl(parts.query) if k != "channel_binding"]
+    return urlunparse(parts._replace(query=urlencode(query)))
 
 
 async def init_db() -> None:
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                chat_id INTEGER PRIMARY KEY,
-                city    TEXT NOT NULL DEFAULT ?,
-                active  INTEGER NOT NULL DEFAULT 1
-            )
-            """.replace("?", f"'{DEFAULT_CITY}'")
-        )
-        await db.commit()
+    global pool
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL topilmadi. .env yoki Render sozlamalarini tekshiring.")
+    pool = await asyncpg.create_pool(_clean_dsn(DATABASE_URL), min_size=1, max_size=5)
+    async with pool.acquire() as conn:
+        await conn.execute(SCHEMA)
 
 
-async def add_user(chat_id: int) -> None:
-    """Yangi foydalanuvchi qo'shadi yoki qayta faollashtiradi."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "INSERT INTO users (chat_id) VALUES (?) "
-            "ON CONFLICT(chat_id) DO UPDATE SET active = 1",
-            (chat_id,),
-        )
-        await db.commit()
-
-
-async def set_city(chat_id: int, city: str) -> None:
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "INSERT INTO users (chat_id, city) VALUES (?, ?) "
-            "ON CONFLICT(chat_id) DO UPDATE SET city = excluded.city, active = 1",
-            (chat_id, city),
-        )
-        await db.commit()
-
-
-async def get_city(chat_id: int) -> str:
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("SELECT city FROM users WHERE chat_id = ?", (chat_id,)) as cur:
-            row = await cur.fetchone()
-    return row[0] if row else DEFAULT_CITY
-
-
-async def deactivate_user(chat_id: int) -> None:
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("UPDATE users SET active = 0 WHERE chat_id = ?", (chat_id,))
-        await db.commit()
-
-
-async def get_active_users() -> list[tuple[int, str]]:
-    """Faol foydalanuvchilar: [(chat_id, city), ...]"""
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("SELECT chat_id, city FROM users WHERE active = 1") as cur:
-            return [(r[0], r[1]) for r in await cur.fetchall()]
+async def close_db() -> None:
+    if pool:
+        await pool.close()
