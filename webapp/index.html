@@ -1,38 +1,449 @@
 <!doctype html>
 <html lang="uz">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>YO'LDOSH UZ</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <style>
-    body {
-      margin: 0;
-      font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
-      background: var(--tg-theme-bg-color, #fff);
-      color: var(--tg-theme-text-color, #111);
-      display: flex; align-items: center; justify-content: center;
-      min-height: 100vh; text-align: center; padding: 24px; box-sizing: border-box;
-    }
-    h1 { margin: 0 0 8px; font-size: 26px; }
-    p { margin: 6px 0; color: var(--tg-theme-hint-color, #666); }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>YO'LDOSH UZ</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --text: var(--tg-theme-text-color, #111827);
+    --hint: var(--tg-theme-hint-color, #6b7280);
+    --accent: var(--tg-theme-button-color, #2563eb);
+    --accent-text: var(--tg-theme-button-text-color, #ffffff);
+    --card: var(--tg-theme-secondary-bg-color, #f3f4f6);
+    --line: rgba(127, 127, 127, .25);
+    --danger: #dc2626;
+    --ok: #16a34a;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.4 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  header { padding: 14px 16px 6px; }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 2px 0 0; color: var(--hint); font-size: 13px; }
+  main { padding: 8px 16px calc(84px + env(safe-area-inset-bottom)); max-width: 640px; margin: 0 auto; }
+
+  nav { position: fixed; left: 0; right: 0; bottom: 0; display: flex; background: var(--bg);
+    border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); z-index: 5; }
+  nav button { flex: 1; background: none; border: 0; padding: 9px 2px 8px; color: var(--hint);
+    font: inherit; font-size: 11px; cursor: pointer; }
+  nav button .ic { display: block; font-size: 21px; line-height: 1.1; }
+  nav button.on { color: var(--accent); font-weight: 600; }
+
+  .card { background: var(--card); border-radius: 14px; padding: 12px 14px; margin: 10px 0; }
+  .route { font-weight: 600; font-size: 17px; }
+  .route .arrow { color: var(--hint); margin: 0 4px; font-weight: 400; }
+  .when { color: var(--hint); font-size: 14px; margin-top: 2px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+  .price { font-weight: 700; font-size: 17px; }
+  .chip { display: inline-block; background: var(--bg); border-radius: 999px; padding: 2px 10px;
+    font-size: 13px; color: var(--hint); margin: 6px 6px 0 0; }
+  .chip.ok { color: var(--ok); } .chip.bad { color: var(--danger); }
+  .note { font-size: 14px; margin-top: 6px; color: var(--text); opacity: .85; }
+  .pax { border-top: 1px dashed var(--line); margin-top: 8px; padding-top: 6px; font-size: 14px; }
+  .pax div { margin: 3px 0; }
+
+  .field { margin: 10px 0; }
+  .field label { display: block; font-size: 13px; color: var(--hint); margin-bottom: 4px; }
+  input, select, textarea { width: 100%; padding: 11px 12px; font: inherit; color: var(--text);
+    background: var(--card); border: 1px solid transparent; border-radius: 10px; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  .two { display: flex; gap: 10px; } .two > * { flex: 1; min-width: 0; }
+  .swap { display: flex; align-items: center; gap: 8px; }
+  .swap .flip { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; border: 0;
+    background: var(--card); color: var(--accent); font-size: 18px; cursor: pointer; }
+
+  .btn { display: block; width: 100%; padding: 13px; border: 0; border-radius: 12px; cursor: pointer;
+    background: var(--accent); color: var(--accent-text); font: inherit; font-weight: 600; margin-top: 12px; }
+  .btn.small { display: inline-block; width: auto; padding: 8px 14px; margin: 0; font-size: 14px; }
+  .btn.ghost { background: var(--bg); color: var(--danger); border: 1px solid var(--line); }
+  .btn:disabled { opacity: .55; }
+  a { color: var(--accent); text-decoration: none; }
+
+  .empty { text-align: center; color: var(--hint); padding: 40px 10px; }
+  h2 { font-size: 18px; margin: 14px 0 4px; }
+
+  #toast { position: fixed; left: 50%; bottom: calc(80px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    background: rgba(17, 24, 39, .92); color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px;
+    max-width: 88%; text-align: center; z-index: 30; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  #toast.show { opacity: 1; }
+
+  #sheet { position: fixed; inset: 0; z-index: 20; display: none; background: rgba(0, 0, 0, .45); }
+  #sheet.open { display: flex; align-items: flex-end; justify-content: center; }
+  #sheet .panel { background: var(--bg); width: 100%; max-width: 640px; border-radius: 18px 18px 0 0;
+    padding: 16px 16px calc(18px + env(safe-area-inset-bottom)); max-height: 88vh; overflow: auto; }
+  #sheet h3 { margin: 0 0 4px; font-size: 18px; }
+</style>
 </head>
 <body>
-  <div>
-    <div style="font-size:56px">🚗</div>
-    <h1>YO'LDOSH UZ</h1>
-    <p id="hello">Ilova ishlayapti ✅</p>
-    <p>Tez orada: e'lon berish, qidirish va joy band qilish.</p>
-  </div>
-  <script>
-    const tg = window.Telegram && window.Telegram.WebApp;
-    if (tg) {
-      tg.ready();
-      tg.expand();
-      const u = tg.initDataUnsafe && tg.initDataUnsafe.user;
-      if (u) document.getElementById("hello").textContent = "Salom, " + u.first_name + "! Ilova ishlayapti ✅";
+  <header>
+    <h1>🚗 YO'LDOSH UZ</h1>
+    <p>Shaharlararo yo'lovchi va haydovchilar</p>
+  </header>
+  <main id="view"></main>
+  <datalist id="places"></datalist>
+  <nav id="tabs">
+    <button data-tab="search"><span class="ic">🔍</span>Qidirish</button>
+    <button data-tab="post"><span class="ic">➕</span>E'lon berish</button>
+    <button data-tab="mine"><span class="ic">🚗</span>E'lonlarim</button>
+    <button data-tab="bookings"><span class="ic">🎫</span>Bronlarim</button>
+  </nav>
+  <div id="toast"></div>
+  <div id="sheet"><div class="panel" id="panel"></div></div>
+
+<script>
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+
+const MONTHS = ["yanvar","fevral","mart","aprel","may","iyun","iyul","avgust","sentabr","oktabr","noyabr","dekabr"];
+const view = document.getElementById("view");
+const state = { tab: "search", q: { from: "", to: "", day: "" } };
+
+/* ---------- Yordamchi funksiyalar ---------- */
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "value") el.value = v;
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid == null || kid === false) continue;
+    el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  }
+  return el;
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch("/api" + path, {
+    method: opts.method || "GET",
+    headers: { "Content-Type": "application/json", "X-Init-Data": (tg && tg.initData) || "" },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  let data = null;
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok) {
+    const d = data && data.detail;
+    throw new Error(typeof d === "string" ? d : "Maydonlarni to'g'ri to'ldiring");
+  }
+  return data;
+}
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.remove("show"), 2600);
+}
+
+function money(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " so'm"; }
+
+function fmtDT(iso) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Tashkent", day: "numeric", month: "numeric",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(new Date(iso));
+  const g = (t) => parts.find((p) => p.type === t).value;
+  const hh = g("hour") === "24" ? "00" : g("hour");
+  return g("day") + "-" + MONTHS[+g("month") - 1] + ", " + hh + ":" + g("minute");
+}
+
+function todayTashkent() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tashkent" }).format(new Date());
+}
+
+function normPhone(s) {
+  const d = s.replace(/\D/g, "");
+  if (d.length === 9) return "+998" + d;
+  if (d.length === 12 && d.startsWith("998")) return "+" + d;
+  return s.trim();
+}
+
+function savedPhone() { try { return localStorage.getItem("phone") || ""; } catch (e) { return ""; } }
+function savePhone(p) { try { localStorage.setItem("phone", p); } catch (e) {} }
+
+function confirmBox(text, onYes) {
+  if (tg && tg.showConfirm) tg.showConfirm(text, (ok) => ok && onYes());
+  else if (confirm(text)) onYes();
+}
+
+function haptic(kind) { try { tg.HapticFeedback.notificationOccurred(kind); } catch (e) {} }
+
+async function load(container, fn) {
+  container.replaceChildren(h("div", { class: "empty" }, "Yuklanmoqda…"));
+  try { await fn(); } catch (e) { container.replaceChildren(h("div", { class: "empty" }, e.message)); }
+}
+
+/* ---------- Pastdan chiqadigan oyna ---------- */
+const sheet = document.getElementById("sheet");
+const panel = document.getElementById("panel");
+sheet.addEventListener("click", (e) => { if (e.target === sheet) closeSheet(); });
+function openSheet(...content) { panel.replaceChildren(...content); sheet.classList.add("open"); }
+function closeSheet() { sheet.classList.remove("open"); }
+
+/* ---------- Umumiy kartalar ---------- */
+function placeInput(value, placeholder) {
+  return h("input", { type: "text", list: "places", placeholder, value, autocomplete: "off", maxlength: "40" });
+}
+
+function rideHeader(r) {
+  return [
+    h("div", { class: "route" }, r.from_place, h("span", { class: "arrow" }, "→"), r.to_place),
+    h("div", { class: "when" }, "🕒 " + fmtDT(r.depart_at)),
+  ];
+}
+
+function isPast(r) { return new Date(r.depart_at) <= new Date(); }
+
+/* ---------- 1. Qidirish ---------- */
+function viewSearch() {
+  const from = placeInput(state.q.from, "Qayerdan");
+  const to = placeInput(state.q.to, "Qayerga");
+  const day = h("input", { type: "date", value: state.q.day, min: todayTashkent() });
+  const results = h("div");
+
+  const run = () => {
+    state.q = { from: from.value.trim(), to: to.value.trim(), day: day.value };
+    const qs = "from_place=" + encodeURIComponent(state.q.from) +
+      "&to_place=" + encodeURIComponent(state.q.to) + "&day=" + encodeURIComponent(state.q.day);
+    load(results, async () => {
+      const rides = await api("/rides?" + qs);
+      if (!rides.length) {
+        results.replaceChildren(h("div", { class: "empty" }, "Hozircha mos e'lon yo'q.", h("br"),
+          "Boshqa sana yoki yo'nalishni sinab ko'ring."));
+        return;
+      }
+      results.replaceChildren(...rides.map(searchCard));
+    });
+  };
+
+  const flip = h("button", { class: "flip", type: "button", "aria-label": "Almashtirish", onclick: () => {
+    const t = from.value; from.value = to.value; to.value = t;
+  } }, "⇅");
+
+  view.replaceChildren(
+    h("div", { class: "field swap" }, h("div", { style: "flex:1;display:grid;gap:8px" }, from, to), flip),
+    h("div", { class: "field" }, h("label", {}, "Sana (ixtiyoriy)"), day),
+    h("button", { class: "btn", onclick: run }, "Qidirish"),
+    results
+  );
+  run();
+}
+
+function searchCard(r) {
+  return h("div", { class: "card" },
+    rideHeader(r),
+    h("div", {},
+      h("span", { class: "chip ok" }, "💺 " + r.seats_left + " ta joy"),
+      r.car && h("span", { class: "chip" }, "🚘 " + r.car),
+      h("span", { class: "chip" }, "👤 " + r.driver_name)
+    ),
+    r.note && h("div", { class: "note" }, r.note),
+    h("div", { class: "row" },
+      h("span", { class: "price" }, money(r.price)),
+      h("button", { class: "btn small", onclick: () => openBook(r) }, "Band qilish")
+    )
+  );
+}
+
+function openBook(r) {
+  const seats = h("select", {}, ...Array.from({ length: Math.min(r.seats_left, 8) }, (_, i) =>
+    h("option", { value: i + 1 }, String(i + 1))));
+  const phone = h("input", { type: "tel", placeholder: "+998 90 123 45 67", value: savedPhone() });
+  const btn = h("button", { class: "btn" }, "Band qilish");
+
+  btn.onclick = async () => {
+    btn.disabled = true;
+    try {
+      const p = normPhone(phone.value);
+      const res = await api("/rides/" + r.id + "/book", { method: "POST", body: { seats: +seats.value, phone: p } });
+      savePhone(p);
+      haptic("success");
+      openSheet(
+        h("h3", {}, "Band qilindi ✅"),
+        h("p", {}, "Haydovchi sizning raqamingizni oldi va siz bilan bog'lanadi."),
+        h("p", {}, "Haydovchi telefoni: ", h("a", { href: "tel:" + res.driver_phone }, res.driver_phone)),
+        h("button", { class: "btn", onclick: () => { closeSheet(); viewSearch(); } }, "Yopish")
+      );
+    } catch (e) {
+      btn.disabled = false;
+      haptic("error");
+      toast(e.message);
     }
-  </script>
+  };
+
+  openSheet(
+    h("h3", {}, r.from_place + " → " + r.to_place),
+    h("div", { class: "when" }, "🕒 " + fmtDT(r.depart_at) + " · " + money(r.price) + " (bir joy)"),
+    h("div", { class: "two" },
+      h("div", { class: "field" }, h("label", {}, "Joy soni"), seats),
+      h("div", { class: "field" }, h("label", {}, "Telefoningiz"), phone)
+    ),
+    btn
+  );
+}
+
+/* ---------- 2. E'lon berish ---------- */
+function viewPost() {
+  const from = placeInput("", "Masalan: Qo'qon");
+  const to = placeInput("", "Masalan: Toshkent");
+  const day = h("input", { type: "date", min: todayTashkent(), value: todayTashkent() });
+  const time = h("input", { type: "time", value: "08:00" });
+  const seats = h("select", {}, ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) =>
+    h("option", { value: n, selected: n === 3 }, String(n))));
+  const price = h("input", { type: "number", inputmode: "numeric", min: "0", step: "1000", placeholder: "150000" });
+  const car = h("input", { type: "text", placeholder: "Masalan: Cobalt, oq", maxlength: "40" });
+  const phone = h("input", { type: "tel", placeholder: "+998 90 123 45 67", value: savedPhone() });
+  const note = h("textarea", { rows: "2", maxlength: "200", placeholder: "Masalan: yukxona bor, qo'shimcha bagaj yo'q" });
+  const btn = h("button", { class: "btn" }, "E'lonni joylash");
+
+  btn.onclick = async () => {
+    if (!from.value.trim() || !to.value.trim()) return toast("Qayerdan va qayerga ni kiriting");
+    if (!day.value || !time.value) return toast("Sana va vaqtni kiriting");
+    if (price.value === "") return toast("Narxni kiriting");
+    btn.disabled = true;
+    try {
+      const p = normPhone(phone.value);
+      await api("/rides", { method: "POST", body: {
+        from_place: from.value, to_place: to.value, depart_at: day.value + "T" + time.value,
+        seats: +seats.value, price: +price.value, car: car.value, phone: p, note: note.value,
+      } });
+      savePhone(p);
+      haptic("success");
+      toast("E'lon joylandi ✅");
+      go("mine");
+    } catch (e) {
+      btn.disabled = false;
+      haptic("error");
+      toast(e.message);
+    }
+  };
+
+  const f = (label, el) => h("div", { class: "field" }, h("label", {}, label), el);
+  view.replaceChildren(
+    h("h2", {}, "Yangi e'lon"),
+    f("Qayerdan", from), f("Qayerga", to),
+    h("div", { class: "two" }, f("Sana", day), f("Vaqt", time)),
+    h("div", { class: "two" }, f("Bo'sh joylar", seats), f("Narx (bir joy, so'm)", price)),
+    f("Mashina (ixtiyoriy)", car),
+    f("Telefon raqamingiz", phone),
+    f("Izoh (ixtiyoriy)", note),
+    btn
+  );
+}
+
+/* ---------- 3. Mening e'lonlarim ---------- */
+function viewMine() {
+  const box = h("div");
+  view.replaceChildren(h("h2", {}, "Mening e'lonlarim"), box);
+  load(box, async () => {
+    const rides = await api("/my/rides");
+    if (!rides.length) {
+      box.replaceChildren(h("div", { class: "empty" }, "Hali e'lon bermagansiz."));
+      return;
+    }
+    box.replaceChildren(...rides.map(mineCard));
+  });
+}
+
+function mineCard(r) {
+  const past = isPast(r);
+  const status = r.status === "cancelled" ? ["Bekor qilingan", "bad"]
+    : past ? ["O'tgan", ""] : ["Faol", "ok"];
+  const pax = r.passengers.length
+    ? h("div", { class: "pax" }, h("b", {}, "Yo'lovchilar:"),
+        ...r.passengers.map((p) => h("div", {}, p.name + " · " + p.seats + " joy · ",
+          h("a", { href: "tel:" + p.phone }, p.phone))))
+    : null;
+  const canCancel = r.status === "open" && !past;
+
+  return h("div", { class: "card" },
+    rideHeader(r),
+    h("div", {},
+      h("span", { class: "chip " + status[1] }, status[0]),
+      h("span", { class: "chip" }, "💺 bo'sh: " + r.seats_left + " / " + r.seats),
+      h("span", { class: "chip" }, money(r.price))
+    ),
+    pax,
+    canCancel && h("div", { class: "row" }, h("span"),
+      h("button", { class: "btn small ghost", onclick: () => confirmBox(
+        "E'lonni bekor qilasizmi? Yo'lovchilarga xabar boradi.",
+        async () => {
+          try { await api("/rides/" + r.id + "/cancel", { method: "POST" }); toast("Bekor qilindi"); viewMine(); }
+          catch (e) { toast(e.message); }
+        }) }, "Bekor qilish"))
+  );
+}
+
+/* ---------- 4. Mening bronlarim ---------- */
+function viewBookings() {
+  const box = h("div");
+  view.replaceChildren(h("h2", {}, "Mening bronlarim"), box);
+  load(box, async () => {
+    const items = await api("/my/bookings");
+    if (!items.length) {
+      box.replaceChildren(h("div", { class: "empty" }, "Hali joy band qilmagansiz."));
+      return;
+    }
+    box.replaceChildren(...items.map(bookingCard));
+  });
+}
+
+function bookingCard(b) {
+  const past = isPast(b);
+  const active = b.booking_status === "active";
+  const status = !active ? ["Bekor qilingan", "bad"] : past ? ["O'tgan", ""] : ["Band qilingan", "ok"];
+
+  return h("div", { class: "card" },
+    rideHeader(b),
+    h("div", {},
+      h("span", { class: "chip " + status[1] }, status[0]),
+      h("span", { class: "chip" }, "💺 " + b.booked_seats + " joy"),
+      h("span", { class: "chip" }, money(b.price * b.booked_seats))
+    ),
+    active && h("div", { class: "note" }, "Haydovchi: " + b.driver_name + " · ",
+      h("a", { href: "tel:" + b.driver_phone }, b.driver_phone)),
+    active && !past && h("div", { class: "row" }, h("span"),
+      h("button", { class: "btn small ghost", onclick: () => confirmBox(
+        "Bronni bekor qilasizmi?",
+        async () => {
+          try { await api("/bookings/" + b.booking_id + "/cancel", { method: "POST" }); toast("Bron bekor qilindi"); viewBookings(); }
+          catch (e) { toast(e.message); }
+        }) }, "Bekor qilish"))
+  );
+}
+
+/* ---------- Navigatsiya ---------- */
+const views = { search: viewSearch, post: viewPost, mine: viewMine, bookings: viewBookings };
+
+function go(tab) {
+  state.tab = tab;
+  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
+  window.scrollTo(0, 0);
+  views[tab]();
+}
+
+document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => go(b.dataset.tab)));
+
+(async function init() {
+  if (!tg || !tg.initData) {
+    document.getElementById("tabs").style.display = "none";
+    view.replaceChildren(h("div", { class: "empty" },
+      "Bu ilovani Telegram ichidan oching.", h("br"), "Botga /start yozing va «Ilovani ochish» tugmasini bosing."));
+    return;
+  }
+  try {
+    const data = await api("/places");
+    const list = document.getElementById("places");
+    Object.values(data.regions).flat().forEach((p) => list.append(h("option", { value: p })));
+  } catch (e) { /* takliflarsiz ham ishlaydi */ }
+  go("search");
+})();
+</script>
 </body>
 </html>
