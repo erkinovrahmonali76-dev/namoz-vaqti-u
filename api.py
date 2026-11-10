@@ -88,14 +88,23 @@ def ride_dict(r, *, seats_left: int | None = None) -> dict:
 
 
 # ---------- Kanal posti ----------
-def ride_post_text(r, driver_name: str, cancelled: bool = False, reason: str = "") -> str:
-    head = "❌ <b>BEKOR QILINDI</b>\n\n" if cancelled else "📣 <b>Yangi e'lon</b>\n\n"
+def ride_post_text(r, driver_name: str, cancelled: bool = False, reason: str = "",
+                   seats_left: int | None = None) -> str:
+    left = r["seats"] if seats_left is None else seats_left
+    full = not cancelled and left <= 0
+    if cancelled:
+        head = "❌ <b>BEKOR QILINDI</b>\n\n"
+    elif full:
+        head = "✅ <b>TO'LDI</b>\n\n"
+    else:
+        head = "📣 <b>Yangi e'lon</b>\n\n"
+    seats_line = "Joylar to'lgan" if full else f"Bo'sh joy: {left}"
     price = f"{r['price']:,}".replace(",", " ")
     text = (
         f"{head}"
         f"📍 <b>{html.escape(r['from_place'])} → {html.escape(r['to_place'])}</b>\n"
         f"🕒 {fmt_dt(r['depart_at'])}\n"
-        f"💺 Bo'sh joy: {r['seats']}\n"
+        f"💺 {seats_line}\n"
         f"💰 {price} so'm (bir joy)"
     )
     if r["car"]:
@@ -115,6 +124,33 @@ def channel_kb(ride_id: int):
     return InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="🚗 Band qilish", url=f"https://t.me/{BOT_USERNAME}?start=ride_{ride_id}")
     ]])
+
+
+async def refresh_channel_post(ride_id: int) -> None:
+    """Bron yoki bekor qilishdan keyin kanal postini yangilaydi (bo'sh joy / TO'LDI)."""
+    try:
+        async with pool().acquire() as conn:
+            r = await conn.fetchrow(
+                """
+                SELECT r.*, u.name AS driver_name,
+                       r.seats - COALESCE((SELECT SUM(seats) FROM bookings
+                                           WHERE ride_id = r.id AND status = 'active'), 0) AS seats_left
+                FROM rides r JOIN users u ON u.tg_id = r.driver_id
+                WHERE r.id = $1
+                """,
+                ride_id,
+            )
+        if not r or r["status"] != "open" or not r["channel_msg_id"]:
+            return
+        left = int(r["seats_left"])
+        await bot.edit_message_text(
+            ride_post_text(r, r["driver_name"], seats_left=left),
+            chat_id=CHANNEL, message_id=r["channel_msg_id"],
+            reply_markup=channel_kb(ride_id) if left > 0 else None,
+        )
+    except Exception as e:
+        if "not modified" not in str(e):
+            logging.exception("Kanal posti yangilanmadi (ride_id=%s)", ride_id)
 
 
 # ---------- Ochiq ma'lumotlar ----------
@@ -350,6 +386,7 @@ async def book_ride(ride_id: int, body: BookIn, user: dict = Depends(current_use
         f"📞 {html.escape(phone)}\n"
         f"💺 Joy soni: {body.seats}",
     )
+    await refresh_channel_post(ride_id)
     return {"id": booking_id, "driver_phone": ride["phone"]}
 
 
@@ -405,4 +442,5 @@ async def cancel_booking(booking_id: int, body: CancelIn, user: dict = Depends(c
             f"👤 {html.escape(user['name'])}, joy: {row['seats']}\n"
             f"Sabab: {html.escape(reason)}",
         )
+        await refresh_channel_post(row["ride_id"])
     return {"ok": True}
