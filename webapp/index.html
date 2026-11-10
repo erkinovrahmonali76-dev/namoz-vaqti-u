@@ -243,6 +243,11 @@ function normPhone(s) {
 function savedPhone() { try { return localStorage.getItem("phone") || ""; } catch (e) { return ""; } }
 function savePhone(p) { try { localStorage.setItem("phone", p); } catch (e) {} }
 
+function confirmBox(text, onYes) {
+  if (tg && tg.showConfirm) tg.showConfirm(text, (ok) => ok && onYes());
+  else if (confirm(text)) onYes();
+}
+
 function haptic(kind) { try { tg.HapticFeedback.notificationOccurred(kind); } catch (e) {} }
 
 async function load(container, fn) {
@@ -463,6 +468,7 @@ function viewMine() {
 function mineCard(r) {
   const past = isPast(r);
   const status = r.status === "cancelled" ? ["Bekor qilingan", "bad"]
+    : r.status === "closed" ? ["To'lgan", ""]
     : past ? ["O'tgan", ""] : ["Faol", "ok"];
   const pax = r.passengers.length
     ? h("div", { class: "pax" }, h("b", {}, "Yo'lovchilar:"),
@@ -479,7 +485,13 @@ function mineCard(r) {
       h("span", { class: "chip" }, money(r.price))
     ),
     pax,
-    canCancel && h("div", { class: "row" }, h("span"),
+    canCancel && h("div", { class: "row" },
+      h("button", { class: "btn small", onclick: () => confirmBox(
+        "To'ldingizmi? E'lon kanaldan o'chadi va qidiruvdan olinadi.",
+        async () => {
+          try { await api("/rides/" + r.id + "/full", { method: "POST" }); haptic("success"); toast("E'lon yopildi ✅"); viewMine(); }
+          catch (e) { toast(e.message); }
+        }) }, "✅ To'ldim"),
       h("button", { class: "btn small ghost", onclick: () => askReason(
         "E'lonni nima uchun bekor qilyapsiz?", DRIVER_REASONS,
         async (reason) => {
