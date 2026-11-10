@@ -62,6 +62,10 @@
   .btn:disabled { opacity: .55; }
   a { color: var(--accent); text-decoration: none; }
 
+  .opt { display: block; width: 100%; text-align: left; padding: 11px 12px; margin: 6px 0; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--card); color: var(--text); font: inherit; cursor: pointer; }
+  .opt.on { border-color: var(--accent); font-weight: 600; }
+
   .empty { text-align: center; color: var(--hint); padding: 40px 10px; }
   h2 { font-size: 18px; margin: 14px 0 4px; }
 
@@ -100,6 +104,12 @@ if (tg) { tg.ready(); tg.expand(); }
 const MONTHS = ["yanvar","fevral","mart","aprel","may","iyun","iyul","avgust","sentabr","oktabr","noyabr","dekabr"];
 const view = document.getElementById("view");
 const state = { tab: "search", q: { from: "", to: "", day: "" } };
+let CHANNEL_URL = "https://t.me/yoldoshuzz";
+
+const DRIVER_REASONS = ["Mashina buzildi", "Rejalarim o'zgardi", "Yo'lovchi topilmadi",
+  "E'lonni xato berdim", "Boshqa sabab"];
+const PASSENGER_REASONS = ["Rejalarim o'zgardi", "Narxi qimmat", "Boshqa transport topdim",
+  "Adashib band qildim", "Haydovchi bilan kelisha olmadim", "Boshqa sabab"];
 
 /* ---------- Yordamchi funksiyalar ---------- */
 function h(tag, attrs, ...kids) {
@@ -128,9 +138,24 @@ async function api(path, opts = {}) {
   try { data = await res.json(); } catch (e) {}
   if (!res.ok) {
     const d = data && data.detail;
+    if (d === "not_subscribed") { showSubscribe(); throw new Error("Kanalga obuna bo'ling"); }
     throw new Error(typeof d === "string" ? d : "Maydonlarni to'g'ri to'ldiring");
   }
   return data;
+}
+
+function showSubscribe() {
+  closeSheet();
+  document.getElementById("tabs").style.display = "none";
+  view.replaceChildren(h("div", { class: "empty" },
+    h("h2", {}, "📢 Kanalga obuna bo'ling"),
+    h("p", {}, "Ilovadan foydalanish uchun bizning kanalga obuna bo'lishingiz kerak."),
+    h("button", { class: "btn", onclick: () => {
+      if (tg && tg.openTelegramLink) tg.openTelegramLink(CHANNEL_URL); else window.open(CHANNEL_URL);
+    } }, "Kanalga o'tish"),
+    h("button", { class: "btn ghost", style: "color:var(--accent)", onclick: () => location.reload() },
+      "✅ Obuna bo'ldim, tekshirish")
+  ));
 }
 
 function toast(msg) {
@@ -167,11 +192,6 @@ function normPhone(s) {
 function savedPhone() { try { return localStorage.getItem("phone") || ""; } catch (e) { return ""; } }
 function savePhone(p) { try { localStorage.setItem("phone", p); } catch (e) {} }
 
-function confirmBox(text, onYes) {
-  if (tg && tg.showConfirm) tg.showConfirm(text, (ok) => ok && onYes());
-  else if (confirm(text)) onYes();
-}
-
 function haptic(kind) { try { tg.HapticFeedback.notificationOccurred(kind); } catch (e) {} }
 
 async function load(container, fn) {
@@ -185,6 +205,32 @@ const panel = document.getElementById("panel");
 sheet.addEventListener("click", (e) => { if (e.target === sheet) closeSheet(); });
 function openSheet(...content) { panel.replaceChildren(...content); sheet.classList.add("open"); }
 function closeSheet() { sheet.classList.remove("open"); }
+
+/* ---------- Bekor qilish sababini so'rash ---------- */
+function askReason(title, reasons, onSubmit) {
+  let chosen = "";
+  const other = h("textarea", { rows: "2", maxlength: "150", placeholder: "Sababini yozing",
+    style: "display:none;margin-top:8px" });
+  const btn = h("button", { class: "btn" }, "Bekor qilish");
+  const opts = reasons.map((r) => {
+    const b = h("button", { class: "opt", type: "button" }, r);
+    b.onclick = () => {
+      chosen = r;
+      opts.forEach((o) => o.classList.toggle("on", o === b));
+      other.style.display = r === "Boshqa sabab" ? "block" : "none";
+    };
+    return b;
+  });
+  btn.onclick = async () => {
+    const reason = chosen === "Boshqa sabab" ? other.value.trim() : chosen;
+    if (reason.length < 2) return toast("Sababni tanlang");
+    btn.disabled = true;
+    try { await onSubmit(reason); closeSheet(); }
+    catch (e) { btn.disabled = false; toast(e.message); }
+  };
+  openSheet(h("h3", {}, title), ...opts, other, btn,
+    h("button", { class: "btn ghost", style: "color:var(--text)", onclick: closeSheet }, "Orqaga"));
+}
 
 /* ---------- Umumiy kartalar ---------- */
 function placeInput(value, placeholder) {
@@ -315,7 +361,7 @@ function viewPost() {
       } });
       savePhone(p);
       haptic("success");
-      toast("E'lon joylandi ✅");
+      toast("E'lon joylandi va kanalga yuborildi ✅");
       go("mine");
     } catch (e) {
       btn.disabled = false;
@@ -371,11 +417,11 @@ function mineCard(r) {
     ),
     pax,
     canCancel && h("div", { class: "row" }, h("span"),
-      h("button", { class: "btn small ghost", onclick: () => confirmBox(
-        "E'lonni bekor qilasizmi? Yo'lovchilarga xabar boradi.",
-        async () => {
-          try { await api("/rides/" + r.id + "/cancel", { method: "POST" }); toast("Bekor qilindi"); viewMine(); }
-          catch (e) { toast(e.message); }
+      h("button", { class: "btn small ghost", onclick: () => askReason(
+        "E'lonni nima uchun bekor qilyapsiz?", DRIVER_REASONS,
+        async (reason) => {
+          await api("/rides/" + r.id + "/cancel", { method: "POST", body: { reason } });
+          toast("Bekor qilindi"); viewMine();
         }) }, "Bekor qilish"))
   );
 }
@@ -409,11 +455,11 @@ function bookingCard(b) {
     active && h("div", { class: "note" }, "Haydovchi: " + b.driver_name + " · ",
       h("a", { href: "tel:" + b.driver_phone }, b.driver_phone)),
     active && !past && h("div", { class: "row" }, h("span"),
-      h("button", { class: "btn small ghost", onclick: () => confirmBox(
-        "Bronni bekor qilasizmi?",
-        async () => {
-          try { await api("/bookings/" + b.booking_id + "/cancel", { method: "POST" }); toast("Bron bekor qilindi"); viewBookings(); }
-          catch (e) { toast(e.message); }
+      h("button", { class: "btn small ghost", onclick: () => askReason(
+        "Bronni nima uchun bekor qilyapsiz?", PASSENGER_REASONS,
+        async (reason) => {
+          await api("/bookings/" + b.booking_id + "/cancel", { method: "POST", body: { reason } });
+          toast("Bron bekor qilindi"); viewBookings();
         }) }, "Bekor qilish"))
   );
 }
@@ -439,9 +485,13 @@ document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("cli
   }
   try {
     const data = await api("/places");
+    if (data.channel_url) CHANNEL_URL = data.channel_url;
     const list = document.getElementById("places");
     Object.values(data.regions).flat().forEach((p) => list.append(h("option", { value: p })));
   } catch (e) { /* takliflarsiz ham ishlaydi */ }
+
+  // Majburiy obuna: obuna bo'lmasa api() o'zi showSubscribe() ni chiqaradi
+  try { await api("/me"); } catch (e) { return; }
   go("search");
 })();
 </script>
