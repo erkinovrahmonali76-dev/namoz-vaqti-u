@@ -8,7 +8,8 @@ APP_NAME = "YO'LDOSH UZ"
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
-WEBAPP_URL = os.getenv("WEBAPP_URL", "").rstrip("/")
+# Render o'zi RENDER_EXTERNAL_URL beradi, shuning uchun WEBAPP_URL majburiy emas
+WEBAPP_URL = (os.getenv("WEBAPP_URL") or os.getenv("RENDER_EXTERNAL_URL", "")).rstrip("/")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 
 # Viloyatlar va ularning asosiy shahar/tumanlari.
