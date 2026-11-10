@@ -1,16 +1,19 @@
-"""Telegram Mini App foydalanuvchisini tekshirish (initData imzosi)."""
+"""Telegram Mini App foydalanuvchisini tekshirish (initData imzosi + kanalga obuna)."""
 import hashlib
 import hmac
 import json
+import logging
 import time
 from urllib.parse import parse_qsl
 
 from fastapi import Header, HTTPException
 
 import db
-from config import BOT_TOKEN
+from bot import bot
+from config import BOT_TOKEN, CHANNEL
 
 MAX_AGE_SEC = 24 * 3600
+_sub_ok: dict[int, float] = {}  # obuna bo'lganlar keshi (60 soniya)
 
 
 def validate_init_data(init_data: str) -> dict:
@@ -38,13 +41,31 @@ def validate_init_data(init_data: str) -> dict:
         raise HTTPException(401, "Foydalanuvchi topilmadi")
 
 
+async def is_subscribed(user_id: int) -> bool:
+    """Foydalanuvchi kanal a'zosimi? (bot kanalda admin bo'lishi kerak)"""
+    if time.time() - _sub_ok.get(user_id, 0) < 60:
+        return True
+    try:
+        m = await bot.get_chat_member(CHANNEL, user_id)
+        ok = m.status in ("member", "administrator", "creator")
+    except Exception:
+        logging.exception("Obunani tekshirib bo'lmadi. Bot kanalda admin ekanini tekshiring")
+        return False
+    if ok:
+        _sub_ok[user_id] = time.time()
+    return ok
+
+
 async def current_user(x_init_data: str = Header(default="")) -> dict:
-    """Har bir so'rovda foydalanuvchini aniqlaydi va bazaga yozib qo'yadi."""
+    """Har bir so'rovda foydalanuvchini aniqlaydi, obunani tekshiradi va bazaga yozadi."""
     if not x_init_data:
         raise HTTPException(401, "Ilovani Telegram ichidan oching")
     tg = validate_init_data(x_init_data)
     if db.pool is None:
         raise HTTPException(503, "Baza ulanmagan")
+
+    if not await is_subscribed(tg["id"]):
+        raise HTTPException(403, "not_subscribed")
 
     name = f"{tg.get('first_name', '')} {tg.get('last_name', '')}".strip()
     async with db.pool.acquire() as conn:
