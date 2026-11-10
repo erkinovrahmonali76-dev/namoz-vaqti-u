@@ -5,94 +5,137 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>YO'LDOSH UZ</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: var(--tg-theme-bg-color, #ffffff);
-    --text: var(--tg-theme-text-color, #111827);
-    --hint: var(--tg-theme-hint-color, #6b7280);
-    --accent: var(--tg-theme-button-color, #2563eb);
-    --accent-text: var(--tg-theme-button-text-color, #ffffff);
-    --card: var(--tg-theme-secondary-bg-color, #f3f4f6);
-    --line: rgba(127, 127, 127, .25);
-    --danger: #dc2626;
-    --ok: #16a34a;
+    --bg: #f2f3f6; --surface: #ffffff; --ink: #12161c; --mute: #6b7380; --line: #e3e6ec;
+    --asphalt: #12161c; --brand: #ffc933; --brand-ink: #12161c;
+    --teal: #0d9488; --danger: #e5484d; --r: 20px;
+    --shadow: 0 1px 2px rgba(16,24,40,.05), 0 10px 28px -14px rgba(16,24,40,.22);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1015; --surface: #171b22; --ink: #f2f4f7; --mute: #8d96a3; --line: #262c36;
+    --shadow: none;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; background: var(--bg); color: var(--text);
-    font: 16px/1.4 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-  header { padding: 14px 16px 6px; }
-  header h1 { margin: 0; font-size: 20px; }
-  header p { margin: 2px 0 0; color: var(--hint); font-size: 13px; }
-  main { padding: 8px 16px calc(84px + env(safe-area-inset-bottom)); max-width: 640px; margin: 0 auto; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 500 15px/1.4 Manrope, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
 
-  nav { position: fixed; left: 0; right: 0; bottom: 0; display: flex; background: var(--bg);
-    border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); z-index: 5; }
-  nav button { flex: 1; background: none; border: 0; padding: 9px 2px 8px; color: var(--hint);
-    font: inherit; font-size: 11px; cursor: pointer; }
-  nav button .ic { display: block; font-size: 21px; line-height: 1.1; }
-  nav button.on { color: var(--accent); font-weight: 600; }
+  header { background: var(--asphalt); color: #fff; padding: 18px 18px 44px;
+    border-radius: 0 0 28px 28px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo { width: 42px; height: 42px; border-radius: 13px; background: var(--brand); display: grid;
+    place-items: center; font-size: 22px; transform: rotate(-6deg); }
+  header h1 { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: .2px; }
+  header p { margin: 1px 0 0; color: #9aa3b2; font-size: 12.5px; }
+  .road { height: 3px; margin-top: 16px; border-radius: 3px; opacity: .9;
+    background: repeating-linear-gradient(90deg, var(--brand) 0 14px, transparent 14px 26px); }
 
-  .card { background: var(--card); border-radius: 14px; padding: 12px 14px; margin: 10px 0; }
-  .route { font-weight: 600; font-size: 17px; }
-  .route .arrow { color: var(--hint); margin: 0 4px; font-weight: 400; }
-  .when { color: var(--hint); font-size: 14px; margin-top: 2px; }
-  .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
-  .price { font-weight: 700; font-size: 17px; }
-  .chip { display: inline-block; background: var(--bg); border-radius: 999px; padding: 2px 10px;
-    font-size: 13px; color: var(--hint); margin: 6px 6px 0 0; }
-  .chip.ok { color: var(--ok); } .chip.bad { color: var(--danger); }
-  .note { font-size: 14px; margin-top: 6px; color: var(--text); opacity: .85; }
-  .pax { border-top: 1px dashed var(--line); margin-top: 8px; padding-top: 6px; font-size: 14px; }
-  .pax div { margin: 3px 0; }
+  main { padding: 4px 14px calc(100px + env(safe-area-inset-bottom)); max-width: 640px; margin: 0 auto; }
 
-  .field { margin: 10px 0; }
-  .field label { display: block; font-size: 13px; color: var(--hint); margin-bottom: 4px; }
-  input, select, textarea { width: 100%; padding: 11px 12px; font: inherit; color: var(--text);
-    background: var(--card); border: 1px solid transparent; border-radius: 10px; outline: none; }
-  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
-  .two { display: flex; gap: 10px; } .two > * { flex: 1; min-width: 0; }
+  nav { position: fixed; left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 5;
+    display: flex; gap: 4px; padding: 6px; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 24px; box-shadow: 0 12px 32px -10px rgba(0,0,0,.35); max-width: 616px; margin: 0 auto; }
+  nav button { flex: 1; background: none; border: 0; border-radius: 18px; padding: 8px 2px 7px; color: var(--mute);
+    font: inherit; font-size: 10.5px; font-weight: 700; cursor: pointer; transition: background .15s, color .15s; }
+  nav button svg { display: block; margin: 0 auto 2px; width: 22px; height: 22px; fill: none; stroke: currentColor;
+    stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  nav button.on { background: var(--brand); color: var(--brand-ink); }
+
+  .searchbox { position: relative; margin-top: -30px; background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--r); padding: 14px; box-shadow: var(--shadow); }
+  .searchbox input { background: var(--bg); }
+  .searchbox .field { margin-bottom: 0; }
   .swap { display: flex; align-items: center; gap: 8px; }
-  .swap .flip { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; border: 0;
-    background: var(--card); color: var(--accent); font-size: 18px; cursor: pointer; }
+  .swap .pair { flex: 1; display: grid; gap: 8px; min-width: 0; }
+  .swap .flip { flex: 0 0 auto; width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line);
+    background: var(--bg); color: var(--ink); font-size: 18px; cursor: pointer; }
 
-  .btn { display: block; width: 100%; padding: 13px; border: 0; border-radius: 12px; cursor: pointer;
-    background: var(--accent); color: var(--accent-text); font: inherit; font-weight: 600; margin-top: 12px; }
-  .btn.small { display: inline-block; width: auto; padding: 8px 14px; margin: 0; font-size: 14px; }
-  .btn.ghost { background: var(--bg); color: var(--danger); border: 1px solid var(--line); }
+  .card { position: relative; overflow: hidden; background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--r); padding: 16px; margin: 12px 0; box-shadow: var(--shadow); }
+  .trip { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; }
+  .trip .pt { font-weight: 800; font-size: 18px; line-height: 1.15; }
+  .trip .pt.end { text-align: right; }
+  .trip .line { position: relative; height: 2px; min-width: 28px; opacity: .55;
+    background: repeating-linear-gradient(90deg, var(--mute) 0 5px, transparent 5px 10px); }
+  .trip .line span { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -52%);
+    background: var(--surface); padding: 0 5px; font-size: 15px; }
+  .when { margin-top: 8px; color: var(--mute); font-size: 13.5px; font-weight: 600; }
+  .perf { position: relative; margin: 14px -16px 12px; border-top: 2px dashed var(--line); }
+  .perf::before, .perf::after { content: ""; position: absolute; top: -10px; width: 18px; height: 18px;
+    border-radius: 50%; background: var(--bg); border: 1px solid var(--line); }
+  .perf::before { left: -10px; } .perf::after { right: -10px; }
+
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; }
+  .price { font-weight: 800; font-size: 20px; }
+  .chip { display: inline-block; background: var(--bg); border-radius: 999px; padding: 3px 11px;
+    font-size: 12.5px; font-weight: 700; color: var(--mute); margin: 0 6px 6px 0; }
+  .chip.ok { color: var(--teal); background: color-mix(in srgb, var(--teal) 14%, transparent); }
+  .chip.bad { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
+  .note { font-size: 13.5px; margin-top: 2px; color: var(--ink); opacity: .8; }
+  .pax { border-top: 1px dashed var(--line); margin-top: 10px; padding-top: 8px; font-size: 13.5px; }
+  .pax div { margin: 4px 0; }
+
+  .field { margin: 12px 0; }
+  .field label { display: block; font-size: 12.5px; font-weight: 700; color: var(--mute); margin-bottom: 5px; }
+  input, select, textarea { width: 100%; padding: 12px 14px; font: inherit; font-weight: 600; color: var(--ink);
+    background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px; outline: none;
+    transition: border-color .15s; }
+  input::placeholder, textarea::placeholder { color: var(--mute); font-weight: 500; opacity: .8; }
+  input:focus, select:focus, textarea:focus { border-color: var(--brand); }
+  .two { display: flex; gap: 10px; } .two > * { flex: 1; min-width: 0; }
+
+  .btn { display: block; width: 100%; padding: 14px; border: 0; border-radius: 16px; cursor: pointer;
+    background: var(--brand); color: var(--brand-ink); font: inherit; font-weight: 800; font-size: 15px;
+    margin-top: 14px; transition: transform .1s; }
+  .btn:active { transform: scale(.98); }
+  .btn.small { display: inline-block; width: auto; padding: 10px 18px; margin: 0; font-size: 14px; border-radius: 14px; }
+  .btn.ghost { background: transparent; color: var(--danger); border: 1.5px solid var(--line); }
   .btn:disabled { opacity: .55; }
-  a { color: var(--accent); text-decoration: none; }
+  a { color: var(--teal); font-weight: 700; text-decoration: none; }
 
-  .opt { display: block; width: 100%; text-align: left; padding: 11px 12px; margin: 6px 0; border-radius: 10px;
-    border: 1px solid var(--line); background: var(--card); color: var(--text); font: inherit; cursor: pointer; }
-  .opt.on { border-color: var(--accent); font-weight: 600; }
+  .opt { display: block; width: 100%; text-align: left; padding: 13px 14px; margin: 7px 0; border-radius: 14px;
+    border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-weight: 600;
+    cursor: pointer; }
+  .opt.on { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 16%, transparent); font-weight: 800; }
 
-  .empty { text-align: center; color: var(--hint); padding: 40px 10px; }
-  h2 { font-size: 18px; margin: 14px 0 4px; }
+  .empty { text-align: center; color: var(--mute); padding: 44px 12px; font-weight: 600; }
+  h2 { font-size: 22px; font-weight: 800; margin: 22px 2px 6px; }
 
-  #toast { position: fixed; left: 50%; bottom: calc(80px + env(safe-area-inset-bottom)); transform: translateX(-50%);
-    background: rgba(17, 24, 39, .92); color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px;
-    max-width: 88%; text-align: center; z-index: 30; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  #toast { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    background: var(--ink); color: var(--bg); padding: 11px 18px; border-radius: 999px; font-size: 13.5px;
+    font-weight: 700; max-width: 88%; text-align: center; z-index: 30; opacity: 0; pointer-events: none;
+    transition: opacity .2s; }
   #toast.show { opacity: 1; }
 
-  #sheet { position: fixed; inset: 0; z-index: 20; display: none; background: rgba(0, 0, 0, .45); }
+  #sheet { position: fixed; inset: 0; z-index: 20; display: none; background: rgba(8, 10, 14, .55); }
   #sheet.open { display: flex; align-items: flex-end; justify-content: center; }
-  #sheet .panel { background: var(--bg); width: 100%; max-width: 640px; border-radius: 18px 18px 0 0;
-    padding: 16px 16px calc(18px + env(safe-area-inset-bottom)); max-height: 88vh; overflow: auto; }
-  #sheet h3 { margin: 0 0 4px; font-size: 18px; }
+  #sheet .panel { position: relative; background: var(--surface); width: 100%; max-width: 640px;
+    border-radius: 28px 28px 0 0; padding: 26px 18px calc(20px + env(safe-area-inset-bottom));
+    max-height: 90vh; overflow: auto; animation: up .22s ease-out; }
+  #sheet .panel::before { content: ""; position: absolute; top: 9px; left: 50%; width: 40px; height: 4px;
+    margin-left: -20px; border-radius: 4px; background: var(--line); }
+  #sheet h3 { margin: 0 0 4px; font-size: 19px; font-weight: 800; }
+  @keyframes up { from { transform: translateY(40px); opacity: .6; } to { transform: none; opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { #sheet .panel { animation: none; } }
 </style>
 </head>
 <body>
   <header>
-    <h1>🚗 YO'LDOSH UZ</h1>
-    <p>Shaharlararo yo'lovchi va haydovchilar</p>
+    <div class="brand">
+      <div class="logo">🚗</div>
+      <div><h1>YO'LDOSH UZ</h1><p>Shaharlararo yo'lovchi va haydovchilar</p></div>
+    </div>
+    <div class="road"></div>
   </header>
   <main id="view"></main>
   <datalist id="places"></datalist>
   <nav id="tabs">
-    <button data-tab="search"><span class="ic">🔍</span>Qidirish</button>
-    <button data-tab="post"><span class="ic">➕</span>E'lon berish</button>
-    <button data-tab="mine"><span class="ic">🚗</span>E'lonlarim</button>
-    <button data-tab="bookings"><span class="ic">🎫</span>Bronlarim</button>
+    <button data-tab="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Qidirish</button>
+    <button data-tab="post"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>E'lon berish</button>
+    <button data-tab="mine"><svg viewBox="0 0 24 24"><path d="M3 13l2-6h14l2 6v5h-3v-2H6v2H3z"/><circle cx="7.5" cy="13" r=".6"/><circle cx="16.5" cy="13" r=".6"/></svg>E'lonlarim</button>
+    <button data-tab="bookings"><svg viewBox="0 0 24 24"><path d="M4 7h16v3a2 2 0 000 4v3H4v-3a2 2 0 000-4z"/><path d="M14 7v10" stroke-dasharray="2 2"/></svg>Bronlarim</button>
   </nav>
   <div id="toast"></div>
   <div id="sheet"><div class="panel" id="panel"></div></div>
@@ -100,6 +143,15 @@
 <script>
 const tg = window.Telegram && window.Telegram.WebApp;
 if (tg) { tg.ready(); tg.expand(); }
+
+function applyTheme() {
+  const dark = tg && tg.colorScheme ? tg.colorScheme === "dark"
+    : window.matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  try { tg.setHeaderColor("#12161c"); tg.setBackgroundColor(dark ? "#0d1015" : "#f2f3f6"); } catch (e) {}
+}
+applyTheme();
+if (tg && tg.onEvent) tg.onEvent("themeChanged", applyTheme);
 
 const MONTHS = ["yanvar","fevral","mart","aprel","may","iyun","iyul","avgust","sentabr","oktabr","noyabr","dekabr"];
 const view = document.getElementById("view");
@@ -153,7 +205,7 @@ function showSubscribe() {
     h("button", { class: "btn", onclick: () => {
       if (tg && tg.openTelegramLink) tg.openTelegramLink(CHANNEL_URL); else window.open(CHANNEL_URL);
     } }, "Kanalga o'tish"),
-    h("button", { class: "btn ghost", style: "color:var(--accent)", onclick: () => location.reload() },
+    h("button", { class: "btn ghost", style: "color:var(--ink)", onclick: () => location.reload() },
       "✅ Obuna bo'ldim, tekshirish")
   ));
 }
@@ -229,7 +281,7 @@ function askReason(title, reasons, onSubmit) {
     catch (e) { btn.disabled = false; toast(e.message); }
   };
   openSheet(h("h3", {}, title), ...opts, other, btn,
-    h("button", { class: "btn ghost", style: "color:var(--text)", onclick: closeSheet }, "Orqaga"));
+    h("button", { class: "btn ghost", style: "color:var(--ink)", onclick: closeSheet }, "Orqaga"));
 }
 
 /* ---------- Umumiy kartalar ---------- */
@@ -239,8 +291,12 @@ function placeInput(value, placeholder) {
 
 function rideHeader(r) {
   return [
-    h("div", { class: "route" }, r.from_place, h("span", { class: "arrow" }, "→"), r.to_place),
+    h("div", { class: "trip" },
+      h("div", { class: "pt" }, r.from_place),
+      h("div", { class: "line" }, h("span", {}, "🚗")),
+      h("div", { class: "pt end" }, r.to_place)),
     h("div", { class: "when" }, "🕒 " + fmtDT(r.depart_at)),
+    h("div", { class: "perf" }),
   ];
 }
 
@@ -273,9 +329,10 @@ function viewSearch() {
   } }, "⇅");
 
   view.replaceChildren(
-    h("div", { class: "field swap" }, h("div", { style: "flex:1;display:grid;gap:8px" }, from, to), flip),
-    h("div", { class: "field" }, h("label", {}, "Sana (ixtiyoriy)"), day),
-    h("button", { class: "btn", onclick: run }, "Qidirish"),
+    h("div", { class: "searchbox" },
+      h("div", { class: "swap" }, h("div", { class: "pair" }, from, to), flip),
+      h("div", { class: "field" }, h("label", {}, "Sana (ixtiyoriy)"), day),
+      h("button", { class: "btn", onclick: run }, "Qidirish")),
     results
   );
   run();
@@ -493,6 +550,13 @@ document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("cli
   // Majburiy obuna: obuna bo'lmasa api() o'zi showSubscribe() ni chiqaradi
   try { await api("/me"); } catch (e) { return; }
   go("search");
+
+  // Kanal postidan kelgan bo'lsa: shu e'lonning band qilish oynasini ochamiz (?ride=123)
+  const rideId = new URLSearchParams(location.search).get("ride");
+  if (rideId && /^\d+$/.test(rideId)) {
+    try { openBook(await api("/rides/" + rideId)); }
+    catch (e) { toast(e.message); }
+  }
 })();
 </script>
 </body>
