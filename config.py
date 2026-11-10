@@ -1,16 +1,18 @@
 import os
+
 from dotenv import load_dotenv
 
 load_dotenv()
 
-BOT_NAME = "NAMOZ VAQTI UZ"
+APP_NAME = "YO'LDOSH UZ"
+
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
-REMIND_BEFORE_MIN = int(os.getenv("REMIND_BEFORE_MIN", "15"))
-NOTIFY_AT_TIME = os.getenv("NOTIFY_AT_TIME", "true").lower() == "true"
-TIMEZONE = os.getenv("TIMEZONE", "Asia/Tashkent")
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+WEBAPP_URL = os.getenv("WEBAPP_URL", "").rstrip("/")
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 
-# Barcha 5 mahal namoz (Bomdod, Peshin, Asr, Shom, Xufton)
-PRAYERS = ["Bomdod", "Peshin", "Asr", "Shom", "Xufton"]
-
-if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN topilmadi. .env faylini tekshiring.")
+# Yo'nalishlar uchun shaharlar
+CITIES = [
+    "Toshkent", "Samarqand", "Buxoro", "Andijon", "Namangan", "Farg'ona",
+    "Qarshi", "Nukus", "Urganch", "Termiz", "Jizzax", "Guliston", "Navoiy",
+]
