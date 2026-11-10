@@ -12,6 +12,7 @@ import db
 from cities import CITIES
 from config import BOT_NAME, BOT_TOKEN
 from prayer_times import get_prayer_times
+from scheduler import run_scheduler
 
 logging.basicConfig(level=logging.INFO)
 dp = Dispatcher()
@@ -86,6 +87,7 @@ async def cmd_stop(message: Message):
 async def main():
     await db.init_db()
     bot = Bot(BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    asyncio.create_task(run_scheduler(bot))
     await dp.start_polling(bot)
 
 
