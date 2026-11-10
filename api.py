@@ -1,23 +1,22 @@
-"""Mini App uchun API: e'lon berish, qidirish, band qilish, kanalga joylash."""
+"""Mini App uchun API: e'lon berish, qidirish, band qilish."""
 import html
 import logging
 import re
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 import db
-from auth import current_user, is_subscribed, subscribed_user
+from auth import current_user
 from bot import bot
-from config import CHANNEL, CHANNEL_URL, REGIONS
+from config import REGIONS
 
 router = APIRouter(prefix="/api")
 TZ = ZoneInfo("Asia/Tashkent")
 
-# Turli apostroflarni bitta ko'rinishga keltiramiz
+# Taqvimlar uchun bir xil apostrof
 _APOS = re.compile(r"[‘’ʻʼ`´]")
 
 
@@ -37,10 +36,6 @@ def fmt_dt(dt: datetime) -> str:
     return dt.astimezone(TZ).strftime("%d.%m.%Y %H:%M")
 
 
-def esc(value) -> str:
-    return html.escape(str(value))
-
-
 async def notify(chat_id: int, text: str) -> None:
     try:
         await bot.send_message(chat_id, text)
@@ -52,62 +47,6 @@ def pool():
     if db.pool is None:
         raise HTTPException(503, "Baza ulanmagan")
     return db.pool
-
-
-# ---------- Kanal ----------
-_bot_username: str | None = None
-
-
-async def bot_username() -> str:
-    global _bot_username
-    if _bot_username is None:
-        _bot_username = (await bot.get_me()).username
-    return _bot_username
-
-
-def channel_text(r, extra: str = "") -> str:
-    """Kanaldagi e'lon matni. Telefon raqam kanalga chiqarilmaydi."""
-    price = f"{r['price']:,}".replace(",", " ")
-    lines = [
-        f"🚗 <b>{esc(r['from_place'])} → {esc(r['to_place'])}</b>",
-        f"🕒 {fmt_dt(r['depart_at'])}",
-        f"💺 Joylar soni: {r['seats']}",
-        f"💰 Narx: {price} so'm (bir joy)",
-    ]
-    if r["car"]:
-        lines.append(f"🚘 {esc(r['car'])}")
-    if r["note"]:
-        lines.append(f"📝 {esc(r['note'])}")
-    lines.append("")
-    lines.append(extra or "👇 Joy band qilish uchun ilovani oching")
-    return "\n".join(lines)
-
-
-async def post_to_channel(ride) -> int | None:
-    if not CHANNEL:
-        return None
-    try:
-        kb = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="🚗 Band qilish", url=f"https://t.me/{await bot_username()}")
-        ]])
-        msg = await bot.send_message(CHANNEL, channel_text(ride), reply_markup=kb)
-        return msg.message_id
-    except Exception:
-        logging.exception("Kanalga joylab bo'lmadi (bot kanalda adminmi?)")
-        return None
-
-
-async def mark_channel_cancelled(ride) -> None:
-    if not (CHANNEL and ride["channel_msg_id"]):
-        return
-    try:
-        await bot.edit_message_text(
-            channel_text(ride, extra="❌ <b>Bu safar bekor qilindi</b>"),
-            chat_id=CHANNEL,
-            message_id=ride["channel_msg_id"],
-        )
-    except Exception:
-        logging.exception("Kanaldagi e'lonni yangilab bo'lmadi")
 
 
 # ---------- Modellar ----------
@@ -127,11 +66,7 @@ class BookIn(BaseModel):
     phone: str = Field(min_length=7, max_length=20)
 
 
-class CancelIn(BaseModel):
-    reason: str = Field(min_length=2, max_length=200)
-
-
-def ride_dict(r: dict, *, seats_left: int | None = None) -> dict:
+def ride_dict(r, *, seats_left: int | None = None) -> dict:
     return {
         "id": r["id"],
         "from_place": r["from_place"],
@@ -143,7 +78,7 @@ def ride_dict(r: dict, *, seats_left: int | None = None) -> dict:
         "car": r["car"],
         "note": r["note"],
         "status": r["status"],
-        "driver_name": r.get("driver_name", ""),
+        "driver_name": r.get("driver_name", "") if hasattr(r, "get") else r["driver_name"],
     }
 
 
@@ -153,21 +88,8 @@ async def places():
     return {"regions": REGIONS}
 
 
-@router.get("/subscription")
-async def subscription(user: dict = Depends(current_user)):
-    return {
-        "subscribed": await is_subscribed(user["id"]),
-        "channel": CHANNEL,
-        "channel_url": CHANNEL_URL,
-    }
-
-
-# ---------- Qidirish ----------
 @router.get("/rides")
-async def search_rides(
-    from_place: str = "", to_place: str = "", day: str = "",
-    user: dict = Depends(subscribed_user),
-):
+async def search_rides(from_place: str = "", to_place: str = "", day: str = ""):
     p_from = norm_place(from_place) or None
     p_to = norm_place(to_place) or None
     p_day: date | None = None
@@ -204,7 +126,7 @@ async def search_rides(
 
 # ---------- Haydovchi ----------
 @router.post("/rides")
-async def create_ride(body: RideIn, user: dict = Depends(subscribed_user)):
+async def create_ride(body: RideIn, user: dict = Depends(current_user)):
     from_place, to_place = norm_place(body.from_place), norm_place(body.to_place)
     if len(from_place) < 2 or len(to_place) < 2:
         raise HTTPException(400, "Joy nomini kiriting")
@@ -217,7 +139,6 @@ async def create_ride(body: RideIn, user: dict = Depends(subscribed_user)):
     if depart <= datetime.now(TZ):
         raise HTTPException(400, "Ketish vaqti o'tib ketgan")
     phone = norm_phone(body.phone)
-    car, note = body.car.strip(), body.note.strip()
 
     async with pool().acquire() as conn:
         ride_id = await conn.fetchval(
@@ -225,24 +146,15 @@ async def create_ride(body: RideIn, user: dict = Depends(subscribed_user)):
             INSERT INTO rides (driver_id, from_place, to_place, depart_at, seats, price, car, phone, note)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id
             """,
-            user["id"], from_place, to_place, depart, body.seats, body.price, car, phone, note,
+            user["id"], from_place, to_place, depart, body.seats, body.price,
+            body.car.strip(), phone, body.note.strip(),
         )
         await conn.execute("UPDATE users SET phone = $2 WHERE tg_id = $1", user["id"], phone)
-
-    # E'lonni kanalga joylaymiz (xato bo'lsa ham e'lon saqlanib qoladi)
-    msg_id = await post_to_channel({
-        "from_place": from_place, "to_place": to_place, "depart_at": depart,
-        "seats": body.seats, "price": body.price, "car": car, "note": note,
-    })
-    if msg_id:
-        async with pool().acquire() as conn:
-            await conn.execute("UPDATE rides SET channel_msg_id = $2 WHERE id = $1", ride_id, msg_id)
-
-    return {"id": ride_id, "posted_to_channel": bool(msg_id)}
+    return {"id": ride_id}
 
 
 @router.get("/my/rides")
-async def my_rides(user: dict = Depends(subscribed_user)):
+async def my_rides(user: dict = Depends(current_user)):
     async with pool().acquire() as conn:
         rides = await conn.fetch(
             """
@@ -278,8 +190,7 @@ async def my_rides(user: dict = Depends(subscribed_user)):
 
 
 @router.post("/rides/{ride_id}/cancel")
-async def cancel_ride(ride_id: int, body: CancelIn, user: dict = Depends(subscribed_user)):
-    reason = body.reason.strip()
+async def cancel_ride(ride_id: int, user: dict = Depends(current_user)):
     async with pool().acquire() as conn:
         async with conn.transaction():
             ride = await conn.fetchrow(
@@ -290,12 +201,9 @@ async def cancel_ride(ride_id: int, body: CancelIn, user: dict = Depends(subscri
                 raise HTTPException(404, "E'lon topilmadi")
             if ride["status"] != "open":
                 raise HTTPException(400, "E'lon allaqachon yopilgan")
-            await conn.execute(
-                "UPDATE rides SET status = 'cancelled', cancel_reason = $2 WHERE id = $1",
-                ride_id, reason,
-            )
+            await conn.execute("UPDATE rides SET status = 'cancelled' WHERE id = $1", ride_id)
             passengers = await conn.fetch(
-                "UPDATE bookings SET status = 'cancelled', cancel_reason = 'Haydovchi safarni bekor qildi' "
+                "UPDATE bookings SET status = 'cancelled' "
                 "WHERE ride_id = $1 AND status = 'active' RETURNING passenger_id",
                 ride_id,
             )
@@ -303,17 +211,15 @@ async def cancel_ride(ride_id: int, body: CancelIn, user: dict = Depends(subscri
     for p in passengers:
         await notify(
             p["passenger_id"],
-            f"⚠️ <b>Haydovchi safarni bekor qildi</b>\n"
-            f"{esc(ride['from_place'])} → {esc(ride['to_place'])}, {fmt_dt(ride['depart_at'])}\n"
-            f"Sabab: {esc(reason)}",
+            f"⚠️ Haydovchi safarni bekor qildi:\n"
+            f"{html.escape(ride['from_place'])} → {html.escape(ride['to_place'])}, {fmt_dt(ride['depart_at'])}",
         )
-    await mark_channel_cancelled(ride)
     return {"ok": True}
 
 
 # ---------- Yo'lovchi ----------
 @router.post("/rides/{ride_id}/book")
-async def book_ride(ride_id: int, body: BookIn, user: dict = Depends(subscribed_user)):
+async def book_ride(ride_id: int, body: BookIn, user: dict = Depends(current_user)):
     phone = norm_phone(body.phone)
 
     async with pool().acquire() as conn:
@@ -349,16 +255,16 @@ async def book_ride(ride_id: int, body: BookIn, user: dict = Depends(subscribed_
     await notify(
         ride["driver_id"],
         f"🚗 <b>Yangi bron!</b>\n"
-        f"{esc(ride['from_place'])} → {esc(ride['to_place'])}, {fmt_dt(ride['depart_at'])}\n\n"
-        f"👤 {esc(user['name'])}\n"
-        f"📞 {esc(phone)}\n"
+        f"{html.escape(ride['from_place'])} → {html.escape(ride['to_place'])}, {fmt_dt(ride['depart_at'])}\n\n"
+        f"👤 {html.escape(user['name'])}\n"
+        f"📞 {html.escape(phone)}\n"
         f"💺 Joy soni: {body.seats}",
     )
     return {"id": booking_id, "driver_phone": ride["phone"]}
 
 
 @router.get("/my/bookings")
-async def my_bookings(user: dict = Depends(subscribed_user)):
+async def my_bookings(user: dict = Depends(current_user)):
     async with pool().acquire() as conn:
         rows = await conn.fetch(
             """
@@ -386,16 +292,15 @@ async def my_bookings(user: dict = Depends(subscribed_user)):
 
 
 @router.post("/bookings/{booking_id}/cancel")
-async def cancel_booking(booking_id: int, body: CancelIn, user: dict = Depends(subscribed_user)):
-    reason = body.reason.strip()
+async def cancel_booking(booking_id: int, user: dict = Depends(current_user)):
     async with pool().acquire() as conn:
         row = await conn.fetchrow(
             """
-            UPDATE bookings SET status = 'cancelled', cancel_reason = $3
+            UPDATE bookings SET status = 'cancelled'
             WHERE id = $1 AND passenger_id = $2 AND status = 'active'
             RETURNING ride_id, seats
             """,
-            booking_id, user["id"], reason,
+            booking_id, user["id"],
         )
         if not row:
             raise HTTPException(404, "Bron topilmadi")
@@ -404,9 +309,8 @@ async def cancel_booking(booking_id: int, body: CancelIn, user: dict = Depends(s
     if ride:
         await notify(
             ride["driver_id"],
-            f"❌ <b>Bron bekor qilindi</b>\n"
-            f"{esc(ride['from_place'])} → {esc(ride['to_place'])}, {fmt_dt(ride['depart_at'])}\n"
-            f"👤 {esc(user['name'])}, joy: {row['seats']}\n"
-            f"Sabab: {esc(reason)}",
+            f"❌ Bron bekor qilindi:\n"
+            f"{html.escape(ride['from_place'])} → {html.escape(ride['to_place'])}, {fmt_dt(ride['depart_at'])}\n"
+            f"👤 {html.escape(user['name'])}, joy: {row['seats']}",
         )
     return {"ok": True}
