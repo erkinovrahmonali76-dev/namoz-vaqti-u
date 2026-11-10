@@ -22,12 +22,15 @@ async def lifespan(app: FastAPI):
         logging.exception("Baza ulanmadi (DATABASE_URL ni tekshiring)")
 
     if WEBAPP_URL:
-        await bot.set_webhook(
-            f"{WEBAPP_URL}/webhook",
-            secret_token=WEBHOOK_SECRET or None,
-            drop_pending_updates=True,
-        )
-        logging.info("Webhook o'rnatildi: %s/webhook", WEBAPP_URL)
+        try:
+            await bot.set_webhook(
+                f"{WEBAPP_URL}/webhook",
+                secret_token=WEBHOOK_SECRET or None,
+                drop_pending_updates=True,
+            )
+            logging.info("Webhook o'rnatildi: %s/webhook", WEBAPP_URL)
+        except Exception:
+            logging.exception("Webhook o'rnatilmadi (BOT_TOKEN va WEBAPP_URL ni tekshiring)")
     else:
         logging.warning("WEBAPP_URL yo'q, webhook o'rnatilmadi")
 
