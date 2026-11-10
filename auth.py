@@ -1,16 +1,23 @@
-"""Telegram Mini App foydalanuvchisini tekshirish (initData imzosi)."""
+"""Telegram Mini App foydalanuvchisini tekshirish (initData imzosi) va kanal obunasi."""
 import hashlib
 import hmac
 import json
+import logging
 import time
 from urllib.parse import parse_qsl
 
-from fastapi import Header, HTTPException
+from aiogram.exceptions import TelegramAPIError
+from fastapi import Depends, Header, HTTPException
 
 import db
-from config import BOT_TOKEN
+from bot import bot
+from config import BOT_TOKEN, CHANNEL
 
 MAX_AGE_SEC = 24 * 3600
+SUB_TTL_SEC = 120
+
+# Obuna bo'lganlar qisqa muddat eslab qolinadi (Telegram'ga ortiqcha so'rov bormasligi uchun)
+_sub_cache: dict[int, float] = {}
 
 
 def validate_init_data(init_data: str) -> dict:
@@ -54,3 +61,32 @@ async def current_user(x_init_data: str = Header(default="")) -> dict:
             tg["id"], name,
         )
     return {"id": tg["id"], "name": name}
+
+
+async def is_subscribed(user_id: int) -> bool:
+    """Foydalanuvchi kanalga a'zomi? Kanal ko'rsatilmagan bo'lsa, tekshiruv o'chiq."""
+    if not CHANNEL:
+        return True
+    now = time.time()
+    if _sub_cache.get(user_id, 0) > now:
+        return True
+    try:
+        member = await bot.get_chat_member(CHANNEL, user_id)
+    except TelegramAPIError:
+        # Bot kanalda admin bo'lmasa shu xato chiqadi. Hamma qulflanib qolmasligi uchun o'tkazib yuboramiz.
+        logging.exception("Kanal a'zoligini tekshirib bo'lmadi (bot %s kanalida adminmi?)", CHANNEL)
+        return True
+
+    ok = member.status in ("creator", "administrator", "member") or (
+        member.status == "restricted" and getattr(member, "is_member", False)
+    )
+    if ok:
+        _sub_cache[user_id] = now + SUB_TTL_SEC
+    return ok
+
+
+async def subscribed_user(user: dict = Depends(current_user)) -> dict:
+    """Kanalga obuna bo'lmagan foydalanuvchini to'xtatadi."""
+    if not await is_subscribed(user["id"]):
+        raise HTTPException(403, "subscribe_required")
+    return user
