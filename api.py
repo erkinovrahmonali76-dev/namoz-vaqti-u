@@ -12,10 +12,11 @@ from pydantic import BaseModel, Field
 import db
 from auth import current_user
 from bot import bot
-from config import BOT_USERNAME, CHANNEL, CHANNEL_URL, REGIONS
+from config import BOT_USERNAME, CHANNEL, CHANNEL_URL, PLACES
 
 router = APIRouter(prefix="/api")
 TZ = ZoneInfo("Asia/Tashkent")
+PLACE_MAP = {p.lower(): p for p in PLACES}
 
 # Taqvimlar uchun bir xil apostrof
 _APOS = re.compile(r"[‘’ʻʼ`´]")
@@ -156,7 +157,7 @@ async def refresh_channel_post(ride_id: int) -> None:
 # ---------- Ochiq ma'lumotlar ----------
 @router.get("/places")
 async def places():
-    return {"regions": REGIONS, "channel_url": CHANNEL_URL}
+    return {"places": PLACES, "channel_url": CHANNEL_URL}
 
 
 @router.get("/me")
@@ -226,8 +227,10 @@ async def get_ride(ride_id: int):
 @router.post("/rides")
 async def create_ride(body: RideIn, user: dict = Depends(current_user)):
     from_place, to_place = norm_place(body.from_place), norm_place(body.to_place)
-    if len(from_place) < 2 or len(to_place) < 2:
-        raise HTTPException(400, "Joy nomini kiriting")
+    from_place = PLACE_MAP.get(from_place.lower(), "")
+    to_place = PLACE_MAP.get(to_place.lower(), "")
+    if not from_place or not to_place:
+        raise HTTPException(400, "Faqat ro'yxatdagi joylarni tanlang")
     if from_place.lower() == to_place.lower():
         raise HTTPException(400, "Qayerdan va qayerga bir xil bo'lishi mumkin emas")
     try:
