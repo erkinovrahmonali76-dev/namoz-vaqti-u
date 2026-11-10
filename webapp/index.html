@@ -128,16 +128,12 @@ async function api(path, opts = {}) {
   try { data = await res.json(); } catch (e) {}
   if (!res.ok) {
     const d = data && data.detail;
-    if (res.status === 403 && d === "subscribe_required") { showGate(); throw new GateError(); }
     throw new Error(typeof d === "string" ? d : "Maydonlarni to'g'ri to'ldiring");
   }
   return data;
 }
 
-class GateError extends Error { constructor() { super(""); } }
-
 function toast(msg) {
-  if (!msg) return;
   const t = document.getElementById("toast");
   t.textContent = msg;
   t.classList.add("show");
@@ -180,10 +176,7 @@ function haptic(kind) { try { tg.HapticFeedback.notificationOccurred(kind); } ca
 
 async function load(container, fn) {
   container.replaceChildren(h("div", { class: "empty" }, "Yuklanmoqda…"));
-  try { await fn(); } catch (e) {
-    if (e instanceof GateError) return;
-    container.replaceChildren(h("div", { class: "empty" }, e.message));
-  }
+  try { await fn(); } catch (e) { container.replaceChildren(h("div", { class: "empty" }, e.message)); }
 }
 
 /* ---------- Pastdan chiqadigan oyna ---------- */
@@ -192,100 +185,6 @@ const panel = document.getElementById("panel");
 sheet.addEventListener("click", (e) => { if (e.target === sheet) closeSheet(); });
 function openSheet(...content) { panel.replaceChildren(...content); sheet.classList.add("open"); }
 function closeSheet() { sheet.classList.remove("open"); }
-
-/* ---------- Bekor qilish sababi ---------- */
-const REASONS = {
-  passenger: [
-    "Rejalarim o'zgardi",
-    "Boshqa transport topdim",
-    "Narx to'g'ri kelmadi",
-    "Vaqt to'g'ri kelmadi",
-    "Haydovchi bilan kelisha olmadim",
-    "Xato bron qildim",
-  ],
-  driver: [
-    "Rejalarim o'zgardi",
-    "Mashina nosoz yoki ta'mirda",
-    "Yo'lovchi yetarli emas",
-    "Yo'l yoki ob-havo sharoiti",
-    "Kasal yoki shoshilinch ish",
-    "Xato e'lon berdim",
-  ],
-};
-
-function askReason(kind, title, subtitle, onSubmit) {
-  let chosen = "";
-  const other = h("input", { type: "text", placeholder: "Sababni yozing", maxlength: "150",
-    style: "display:none;margin-top:8px" });
-  const btn = h("button", { class: "btn", style: "background:var(--danger)" }, "Bekor qilish");
-
-  const rows = REASONS[kind].concat(["Boshqa sabab"]).map((text) => {
-    const radio = h("input", { type: "radio", name: "reason", style: "width:auto;padding:0;margin-right:10px" });
-    radio.addEventListener("change", () => {
-      chosen = text;
-      other.style.display = text === "Boshqa sabab" ? "block" : "none";
-      if (text === "Boshqa sabab") other.focus();
-    });
-    return h("label", { style: "display:flex;align-items:center;padding:11px 4px;border-bottom:1px solid var(--line);cursor:pointer" },
-      radio, text);
-  });
-
-  btn.onclick = async () => {
-    const reason = chosen === "Boshqa sabab" ? other.value.trim() : chosen;
-    if (!reason) return toast(chosen ? "Sababni yozing" : "Sababni tanlang");
-    btn.disabled = true;
-    try { await onSubmit(reason); closeSheet(); }
-    catch (e) { btn.disabled = false; toast(e.message); }
-  };
-
-  openSheet(
-    h("h3", {}, title),
-    h("div", { class: "when" }, subtitle),
-    h("div", { style: "margin:8px 0" }, ...rows),
-    other,
-    btn
-  );
-}
-
-/* ---------- Kanalga obuna bo'lish ---------- */
-let gateInfo = null;
-
-function showGate() {
-  closeSheet();
-  document.getElementById("tabs").style.display = "none";
-  const info = gateInfo || { channel: "@yoldoshuzz", channel_url: "https://t.me/yoldoshuzz" };
-
-  const open = h("button", { class: "btn", onclick: () => {
-    if (tg && tg.openTelegramLink) tg.openTelegramLink(info.channel_url);
-    else window.open(info.channel_url, "_blank");
-  } }, "📢 Kanalga o'tish");
-
-  const check = h("button", { class: "btn", style: "background:var(--bg);color:var(--accent);border:1px solid var(--line)" },
-    "✅ Obuna bo'ldim, tekshirish");
-  check.onclick = async () => {
-    check.disabled = true;
-    try {
-      const r = await api("/subscription");
-      if (r.subscribed) {
-        document.getElementById("tabs").style.display = "";
-        go("search");
-        return;
-      }
-      toast("Hali obuna bo'lmagansiz");
-    } catch (e) { toast(e.message); }
-    check.disabled = false;
-  };
-
-  view.replaceChildren(h("div", { class: "card", style: "text-align:center;margin-top:24px;padding:22px 16px" },
-    h("div", { style: "font-size:48px" }, "📢"),
-    h("h2", {}, "Kanalimizga obuna bo'ling"),
-    h("p", { class: "when" },
-      "Ilovadan foydalanish uchun " + info.channel + " kanaliga obuna bo'lish kerak. " +
-      "Yangi e'lonlar shu kanalda ham e'lon qilinadi."),
-    open,
-    check
-  ));
-}
 
 /* ---------- Umumiy kartalar ---------- */
 function placeInput(value, placeholder) {
@@ -472,12 +371,11 @@ function mineCard(r) {
     ),
     pax,
     canCancel && h("div", { class: "row" }, h("span"),
-      h("button", { class: "btn small ghost", onclick: () => askReason("driver",
-        "E'lonni bekor qilish", "Nima uchun bekor qilyapsiz? Yo'lovchilarga xabar boradi.",
-        async (reason) => {
-          await api("/rides/" + r.id + "/cancel", { method: "POST", body: { reason } });
-          toast("E'lon bekor qilindi");
-          viewMine();
+      h("button", { class: "btn small ghost", onclick: () => confirmBox(
+        "E'lonni bekor qilasizmi? Yo'lovchilarga xabar boradi.",
+        async () => {
+          try { await api("/rides/" + r.id + "/cancel", { method: "POST" }); toast("Bekor qilindi"); viewMine(); }
+          catch (e) { toast(e.message); }
         }) }, "Bekor qilish"))
   );
 }
@@ -511,12 +409,11 @@ function bookingCard(b) {
     active && h("div", { class: "note" }, "Haydovchi: " + b.driver_name + " · ",
       h("a", { href: "tel:" + b.driver_phone }, b.driver_phone)),
     active && !past && h("div", { class: "row" }, h("span"),
-      h("button", { class: "btn small ghost", onclick: () => askReason("passenger",
-        "Bronni bekor qilish", "Nima uchun bekor qilyapsiz? Haydovchiga xabar boradi.",
-        async (reason) => {
-          await api("/bookings/" + b.booking_id + "/cancel", { method: "POST", body: { reason } });
-          toast("Bron bekor qilindi");
-          viewBookings();
+      h("button", { class: "btn small ghost", onclick: () => confirmBox(
+        "Bronni bekor qilasizmi?",
+        async () => {
+          try { await api("/bookings/" + b.booking_id + "/cancel", { method: "POST" }); toast("Bron bekor qilindi"); viewBookings(); }
+          catch (e) { toast(e.message); }
         }) }, "Bekor qilish"))
   );
 }
@@ -540,11 +437,6 @@ document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("cli
       "Bu ilovani Telegram ichidan oching.", h("br"), "Botga /start yozing va «Ilovani ochish» tugmasini bosing."));
     return;
   }
-  try {
-    const sub = await api("/subscription");
-    gateInfo = sub;
-    if (!sub.subscribed) { showGate(); return; }
-  } catch (e) { toast(e.message); }
   try {
     const data = await api("/places");
     const list = document.getElementById("places");
