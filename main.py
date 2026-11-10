@@ -4,15 +4,17 @@ import logging
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 import db
+from checklist import build_checklist, init_log_table, toggle
 from cities import CITIES
-from config import BOT_NAME, BOT_TOKEN
-from prayer_times import get_prayer_times
+from config import BOT_NAME, BOT_TOKEN, PRAYERS
 from keepalive import start_web_server
+from prayer_times import get_prayer_times
 from scheduler import run_scheduler
 
 logging.basicConfig(level=logging.INFO)
@@ -65,8 +67,32 @@ async def on_city(call: CallbackQuery):
         logging.exception("Namoz vaqtlarini olishda xato")
         text = f"✅ Shahar: {city}. Vaqtlarni hozir olib bo'lmadi, birozdan so'ng /vaqt yuboring."
     await call.message.answer(
-        text + "\n\n🔔 Namozga <b>15 daqiqa</b> qolganda va namoz vaqti kirganda xabar beraman."
+        text
+        + "\n\n🔔 Namozga <b>15 daqiqa</b> qolganda va namoz vaqti kirganda xabar beraman."
+        + "\n✅ Namoz vaqti tugagach, o'qiganlaringizni belgilab qo'yasiz."
     )
+
+
+@dp.callback_query(F.data.startswith("pr:"))
+async def on_prayer_toggle(call: CallbackQuery):
+    try:
+        _, day, i, upto = call.data.split(":")
+        i, upto = int(i), int(upto)
+        prayer = PRAYERS[i]
+    except (ValueError, IndexError):
+        await call.answer("Xatolik", show_alert=True)
+        return
+
+    chat_id = call.message.chat.id
+    now_done = await toggle(chat_id, day, prayer)
+    text, markup = await build_checklist(chat_id, day, upto)
+    if now_done:
+        text += f"\n\n✅ {prayer} belgilandi. Rahmat! Alloh qabul qilsin 🤲"
+    try:
+        await call.message.edit_text(text, reply_markup=markup)
+    except TelegramBadRequest:
+        pass
+    await call.answer("Rahmat! Alloh qabul qilsin 🤲" if now_done else "Belgi olib tashlandi")
 
 
 @dp.message(Command("vaqt"))
@@ -87,6 +113,7 @@ async def cmd_stop(message: Message):
 
 async def main():
     await db.init_db()
+    await init_log_table()
     bot = Bot(BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     await start_web_server()
     asyncio.create_task(run_scheduler(bot))
