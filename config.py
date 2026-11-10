@@ -12,10 +12,6 @@ DATABASE_URL = os.getenv("DATABASE_URL", "")
 WEBAPP_URL = (os.getenv("WEBAPP_URL") or os.getenv("RENDER_EXTERNAL_URL", "")).rstrip("/")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 
-# Majburiy obuna va e'lonlar joylanadigan kanal (bot kanalda admin bo'lishi kerak)
-CHANNEL = os.getenv("CHANNEL", "@yoldoshuzz")
-CHANNEL_URL = f"https://t.me/{CHANNEL.lstrip('@')}" if CHANNEL else ""
-
 # Viloyatlar va ularning asosiy shahar/tumanlari.
 # Haydovchi bu ro'yxatda yo'q joyni ham o'zi yozib qo'sha oladi.
 REGIONS = {
