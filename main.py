@@ -5,6 +5,7 @@ from aiogram.types import Update
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 
+import api
 import db
 from bot import bot, dp
 from config import WEBAPP_URL, WEBHOOK_SECRET
@@ -37,6 +38,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.include_router(api.router)
 
 
 @app.get("/health")
