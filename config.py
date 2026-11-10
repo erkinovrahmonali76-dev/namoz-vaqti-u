@@ -11,8 +11,24 @@ DATABASE_URL = os.getenv("DATABASE_URL", "")
 WEBAPP_URL = os.getenv("WEBAPP_URL", "").rstrip("/")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 
-# Yo'nalishlar uchun shaharlar
-CITIES = [
-    "Toshkent", "Samarqand", "Buxoro", "Andijon", "Namangan", "Farg'ona",
-    "Qarshi", "Nukus", "Urganch", "Termiz", "Jizzax", "Guliston", "Navoiy",
-]
+# Viloyatlar va ularning asosiy shahar/tumanlari.
+# Haydovchi bu ro'yxatda yo'q joyni ham o'zi yozib qo'sha oladi.
+REGIONS = {
+    "Toshkent shahri": ["Toshkent"],
+    "Toshkent viloyati": ["Nurafshon", "Chirchiq", "Angren", "Olmaliq", "Bekobod", "Yangiyo'l", "Ohangaron"],
+    "Andijon viloyati": ["Andijon", "Asaka", "Xonobod", "Shahrixon", "Marhamat", "Paxtaobod", "Qo'rg'ontepa"],
+    "Farg'ona viloyati": ["Farg'ona", "Qo'qon", "Marg'ilon", "Quvasoy", "Yaypan", "Beshariq", "Rishton", "Oltiariq", "Bag'dod"],
+    "Namangan viloyati": ["Namangan", "Chust", "Pop", "Chortoq", "Uchqo'rg'on", "Kosonsoy"],
+    "Samarqand viloyati": ["Samarqand", "Kattaqo'rg'on", "Urgut", "Pastdarg'om", "Ishtixon"],
+    "Buxoro viloyati": ["Buxoro", "G'ijduvon", "Kogon", "Vobkent", "Qorako'l"],
+    "Navoiy viloyati": ["Navoiy", "Zarafshon", "Uchquduq", "Xatirchi", "Nurota"],
+    "Qashqadaryo viloyati": ["Qarshi", "Shahrisabz", "Kitob", "Muborak", "G'uzor", "Yakkabog'"],
+    "Surxondaryo viloyati": ["Termiz", "Denov", "Sherobod", "Boysun", "Sariosiyo"],
+    "Jizzax viloyati": ["Jizzax", "Zomin", "Forish", "G'allaorol", "Do'stlik"],
+    "Sirdaryo viloyati": ["Guliston", "Yangiyer", "Shirin", "Boyovut"],
+    "Xorazm viloyati": ["Urganch", "Xiva", "Shovot", "Xonqa"],
+    "Qoraqalpog'iston": ["Nukus", "Qo'ng'irot", "Xo'jayli", "To'rtko'l", "Beruniy"],
+}
+
+# Takliflar uchun tekis ro'yxat
+PLACES = [place for places in REGIONS.values() for place in places]
